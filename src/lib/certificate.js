@@ -3,260 +3,258 @@ import QRCode from 'qrcode'
 import { getPhotoPublicUrl } from './supabase'
 
 /**
- * Convert an image URL to a base64 data URL for jsPDF embedding
+ * Load an image from URL into an HTMLImageElement
  */
-async function getBase64Image(url) {
-  if (!url) return null
+function loadImage(src) {
   return new Promise((resolve) => {
+    if (!src) {
+      resolve(null)
+      return
+    }
     const img = new Image()
     img.crossOrigin = 'Anonymous'
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.naturalWidth || 300
-        canvas.height = img.naturalHeight || 300
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0)
-        resolve(canvas.toDataURL('image/jpeg', 0.9))
-      } catch (e) {
-        console.warn('Canvas export failed, falling back:', e)
-        resolve(null)
-      }
+    img.onload = () => resolve(img)
+    img.onerror = () => {
+      console.warn('Failed to load image:', src)
+      resolve(null)
     }
-    img.onerror = () => resolve(null)
-    img.src = url
+    // 5-second timeout safeguard
+    setTimeout(() => resolve(null), 5000)
+    img.src = src
   })
 }
 
 /**
- * Generate and download an A4 landscape CaterCrew Verification Certificate
+ * Draw image with object-fit: cover into target rectangle
  */
-export async function generateCertificate(worker) {
-  if (!worker || worker.status !== 'verified') {
-    throw new Error('Certificate is only available for verified catering staff.')
+function drawImageCover(ctx, img, targetX, targetY, targetW, targetH) {
+  const imgW = img.naturalWidth || img.width
+  const imgH = img.naturalHeight || img.height
+
+  const imgRatio = imgW / imgH
+  const targetRatio = targetW / targetH
+
+  let srcX = 0
+  let srcY = 0
+  let srcW = imgW
+  let srcH = imgH
+
+  if (imgRatio > targetRatio) {
+    // Image is wider than target
+    srcW = imgH * targetRatio
+    srcX = (imgW - srcW) / 2
+  } else {
+    // Image is taller than target
+    srcH = imgW / targetRatio
+    srcY = (imgH - srcH) / 2
   }
 
-  // A4 Landscape: 297mm x 210mm
+  ctx.drawImage(img, srcX, srcY, srcW, srcH, targetX, targetY, targetW, targetH)
+}
+
+/**
+ * Draw vector fallback template if template image is unavailable
+ */
+function drawVectorFallback(ctx, width, height) {
+  // Background
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  gradient.addColorStop(0, '#f9fafb')
+  gradient.addColorStop(0.5, '#f4f6fa')
+  gradient.addColorStop(1, '#eaedf2')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, width, height)
+
+  // Outer border
+  ctx.strokeStyle = '#162842'
+  ctx.lineWidth = 3
+  ctx.strokeRect(30, 30, width - 60, height - 60)
+
+  // Inner border with notched corners
+  ctx.lineWidth = 6
+  ctx.strokeRect(45, 45, width - 90, height - 90)
+
+  // Title
+  ctx.fillStyle = '#162842'
+  ctx.textAlign = 'center'
+  ctx.font = '600 48px "Playfair Display", "Cinzel", "Times New Roman", serif'
+  ctx.fillText('VERIFICATIONCERTIFICATE', width / 2, 340)
+
+  // Subtitle
+  ctx.fillStyle = '#4a5568'
+  ctx.font = '400 28px "Plus Jakarta Sans", system-ui, sans-serif'
+  ctx.fillText('This Certificate is given to :', width / 2, 442)
+}
+
+/**
+ * Generate and download the official CaterCrew Verification Certificate PDF
+ * matching the authentic official diploma / certificate design
+ */
+export async function generateCertificate(worker) {
+  if (!worker) {
+    throw new Error('Worker record is required to generate certificate.')
+  }
+
+  // High-resolution canvas for crisp print quality (A4 aspect ratio ~ 1.414)
+  const canvasWidth = 1600
+  const canvasHeight = 1131
+
+  const canvas = document.createElement('canvas')
+  canvas.width = canvasWidth
+  canvas.height = canvasHeight
+  const ctx = canvas.getContext('2d')
+
+  // 1. Load Background Template
+  const templateImg = await loadImage('/certificate-template.jpg')
+  if (templateImg) {
+    ctx.drawImage(templateImg, 0, 0, canvasWidth, canvasHeight)
+  } else {
+    drawVectorFallback(ctx, canvasWidth, canvasHeight)
+  }
+
+  // 2. Draw Recipient's Name
+  const rawName = (worker.full_name || 'Staff Member').trim().toUpperCase()
+  ctx.save()
+  ctx.fillStyle = '#23324f' // Deep midnight navy
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+
+  // Dynamic font sizing for long names
+  let nameFontSize = 54
+  ctx.font = `500 ${nameFontSize}px "Playfair Display", "Cinzel", "Times New Roman", Georgia, serif`
+  let measuredWidth = ctx.measureText(rawName).width
+  const maxNameWidth = 920
+
+  if (measuredWidth > maxNameWidth) {
+    nameFontSize = Math.floor(nameFontSize * (maxNameWidth / measuredWidth))
+    ctx.font = `500 ${nameFontSize}px "Playfair Display", "Cinzel", "Times New Roman", Georgia, serif`
+    measuredWidth = ctx.measureText(rawName).width
+  }
+
+  // Name baseline at y = 556
+  ctx.fillText(rawName, 800, 556)
+  ctx.restore()
+
+  // 3. Draw Gold Accent Divider Line
+  ctx.save()
+  ctx.fillStyle = '#cca756' // Refined gold tone
+  const goldLineWidth = Math.max(540, Math.min(measuredWidth + 80, 850))
+  const goldLineX = 800 - goldLineWidth / 2
+  const goldLineY = 582.5
+  ctx.fillRect(goldLineX, goldLineY, goldLineWidth, 2.5)
+  ctx.restore()
+
+  // 4. Draw CREW ID (Bold Black Sans-serif)
+  const code = (worker.worker_code || 'CC-SLV-000001').trim()
+  const crewIdText = `CREWID:${code}`
+
+  ctx.save()
+  ctx.fillStyle = '#000000'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  ctx.font = '800 42px "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  ctx.fillText(crewIdText, 800, 642)
+  ctx.restore()
+
+  // 5. Draw Worker Photo (Centered below CREW ID)
+  // Target coordinates in reference image: x: 697, y: 731, width: 202, height: 238
+  const photoX = 697
+  const photoY = 731
+  const photoW = 202
+  const photoH = 238
+
+  let photoImg = null
+  const photoPath = worker.photo_path || worker.photo
+  const photoUrl = photoPath ? getPhotoPublicUrl(photoPath) : null
+
+  if (photoUrl) {
+    photoImg = await loadImage(photoUrl)
+  }
+
+  ctx.save()
+  if (photoImg) {
+    // Fill background behind photo to avoid transparency issues
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(photoX, photoY, photoW, photoH)
+
+    // Render photo with object-fit: cover
+    drawImageCover(ctx, photoImg, photoX, photoY, photoW, photoH)
+
+    // Subtle 1px crisp photo border
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(photoX, photoY, photoW, photoH)
+  } else {
+    // Elegant placeholder avatar box if photo is missing or offline
+    ctx.fillStyle = '#e5e7eb'
+    ctx.fillRect(photoX, photoY, photoW, photoH)
+    ctx.strokeStyle = '#cbd5e1'
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(photoX, photoY, photoW, photoH)
+
+    ctx.fillStyle = '#64748b'
+    ctx.textAlign = 'center'
+    ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif'
+    ctx.fillText('VERIFIED', photoX + photoW / 2, photoY + photoH / 2 - 8)
+    ctx.fillText('STAFF PHOTO', photoX + photoW / 2, photoY + photoH / 2 + 18)
+  }
+  ctx.restore()
+
+  // 6. Draw Verification QR Code (Bottom Right Corner)
+  // Target coordinates in reference image: x: 1344, y: 902, width: 142, height: 134
+  const qrX = 1344
+  const qrY = 902
+  const qrW = 142
+  const qrH = 134
+
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const verifyUrl = `${origin}/verify/${encodeURIComponent(code)}`
+
+    const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+      margin: 1,
+      width: 256,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000',
+        light: '#ffffff',
+      },
+    })
+
+    const qrImg = await loadImage(qrDataUrl)
+    if (qrImg) {
+      // Crisp white background for QR code
+      ctx.save()
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(qrX - 2, qrY - 2, qrW + 4, qrH + 4)
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(qrX - 2, qrY - 2, qrW + 4, qrH + 4)
+
+      // Center square QR code inside bounding box
+      const qrSquareSize = Math.min(qrW, qrH)
+      const qrOffsetX = qrX + (qrW - qrSquareSize) / 2
+      const qrOffsetY = qrY + (qrH - qrSquareSize) / 2
+      ctx.drawImage(qrImg, qrOffsetX, qrOffsetY, qrSquareSize, qrSquareSize)
+      ctx.restore()
+    }
+  } catch (err) {
+    console.warn('QR Code rendering encountered an issue:', err)
+  }
+
+  // 7. Convert Canvas to A4 Landscape PDF using jsPDF
+  const certificateDataUrl = canvas.toDataURL('image/jpeg', 0.98)
+
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: 'a4',
+    compress: true,
   })
 
-  const pageWidth = 297
-  const pageHeight = 210
-  const margin = 12
+  // Full A4 Landscape page dimensions (297mm x 210mm)
+  doc.addImage(certificateDataUrl, 'JPEG', 0, 0, 297, 210, undefined, 'FAST')
 
-  // Background
-  doc.setFillColor(255, 255, 255)
-  doc.rect(0, 0, pageWidth, pageHeight, 'F')
-
-  // Outer Border (Emerald Green)
-  doc.setDrawColor(5, 150, 105) // Emerald-600
-  doc.setLineWidth(1.5)
-  doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2)
-
-  // Inner Accent Border
-  doc.setDrawColor(16, 185, 129) // Emerald-500
-  doc.setLineWidth(0.4)
-  doc.rect(margin + 2.5, margin + 2.5, pageWidth - (margin + 2.5) * 2, pageHeight - (margin + 2.5) * 2)
-
-  // Corner Accents
-  const cornerSize = 8
-  const corners = [
-    [margin + 4, margin + 4],
-    [pageWidth - margin - 4 - cornerSize, margin + 4],
-    [margin + 4, pageHeight - margin - 4 - cornerSize],
-    [pageWidth - margin - 4 - cornerSize, pageHeight - margin - 4 - cornerSize],
-  ]
-  doc.setFillColor(5, 150, 105)
-  corners.forEach(([x, y]) => {
-    doc.rect(x, y, cornerSize, 1, 'F')
-    doc.rect(x, y, 1, cornerSize, 'F')
-  })
-
-  // Header Brand
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(26)
-  doc.setTextColor(5, 150, 105) // Emerald-600
-  doc.text('CATERCREW', pageWidth / 2, 28, { align: 'center' })
-
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(30, 41, 59) // Slate-800
-  doc.text('VERIFICATION CERTIFICATE', pageWidth / 2, 36, { align: 'center' })
-
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(100, 116, 139) // Slate-500
-  doc.text('OFFICIAL CATERING EVENT STAFF CREDENTIAL', pageWidth / 2, 42, { align: 'center' })
-
-  // Decorative Horizontal Line with Diamond
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.5)
-  doc.line(35, 47, pageWidth - 35, 47)
-  doc.setFillColor(5, 150, 105)
-  doc.rect(pageWidth / 2 - 2, 45.8, 4, 2.4, 'F')
-
-  // Verification URL
-  const verifyUrl = `${window.location.origin}/verify/${encodeURIComponent(worker.worker_code)}`
-
-  // 1. Worker Photo (Left)
-  const photoX = 26
-  const photoY = 56
-  const photoW = 44
-  const photoH = 55
-
-  // Photo border box
-  doc.setDrawColor(203, 213, 225)
-  doc.setFillColor(248, 250, 252)
-  doc.roundedRect(photoX, photoY, photoW, photoH, 2, 2, 'FD')
-
-  const photoUrl = getPhotoPublicUrl(worker.photo_path)
-  let photoData = null
-  if (photoUrl) {
-    try {
-      photoData = await getBase64Image(photoUrl)
-    } catch (e) {
-      console.warn('Could not load worker photo for PDF:', e)
-    }
-  }
-
-  if (photoData) {
-    try {
-      doc.addImage(photoData, 'JPEG', photoX + 1, photoY + 1, photoW - 2, photoH - 2)
-    } catch (e) {
-      console.warn('jsPDF addImage failed:', e)
-    }
-  } else {
-    // Fallback photo text
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.setTextColor(148, 163, 184)
-    doc.text('Verified Staff\nPhoto ID', photoX + photoW / 2, photoY + photoH / 2 - 2, { align: 'center' })
-  }
-
-  // 2. Worker Details (Center)
-  const infoX = 78
-  let currentY = 62
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(148, 163, 184)
-  doc.text('REGISTERED NAME', infoX, currentY)
-
-  currentY += 7
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.setTextColor(15, 23, 42)
-  doc.text(worker.full_name || 'Staff Member', infoX, currentY)
-
-  currentY += 10
-  // Worker ID Badge Container
-  doc.setFillColor(236, 253, 245) // emerald-50
-  doc.setDrawColor(16, 185, 129) // emerald-500
-  doc.roundedRect(infoX, currentY - 4, 60, 9, 1.5, 1.5, 'FD')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(6, 95, 70) // emerald-800
-  doc.text(`ID: ${worker.worker_code}`, infoX + 30, currentY + 2, { align: 'center' })
-
-  // Tier Badge Container
-  const tierName = (worker.tier || 'silver').toUpperCase()
-  doc.setFillColor(241, 245, 249) // slate-100
-  doc.setDrawColor(203, 213, 225)
-  doc.roundedRect(infoX + 65, currentY - 4, 52, 9, 1.5, 1.5, 'FD')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(51, 65, 85)
-  doc.text(`${tierName} TIER`, infoX + 91, currentY + 2, { align: 'center' })
-
-  currentY += 14
-  // Verified Status Pill
-  doc.setFillColor(220, 252, 231) // emerald-100
-  doc.setDrawColor(34, 197, 94)
-  doc.roundedRect(infoX, currentY - 4, 50, 8, 1.5, 1.5, 'FD')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(22, 101, 52) // emerald-800
-  doc.text('● VERIFIED ACTIVE', infoX + 25, currentY + 1.5, { align: 'center' })
-
-  currentY += 12
-  // Issue Date
-  const issueDate = worker.verified_at
-    ? new Date(worker.verified_at).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(100, 116, 139)
-  doc.text(`Issued Date: ${issueDate}`, infoX, currentY)
-
-  currentY += 6
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(148, 163, 184)
-  doc.text('Security Status: Background verified & approved for professional catering events.', infoX, currentY)
-
-  // 3. QR Code Section (Right)
-  const qrX = 224
-  const qrY = 56
-  const qrSize = 46
-
-  try {
-    const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-      margin: 1,
-      width: 256,
-      color: {
-        dark: '#0f172a',
-        light: '#ffffff',
-      },
-    })
-    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
-  } catch (err) {
-    console.warn('QR code generation failed:', err)
-  }
-
-  // QR box border
-  doc.setDrawColor(226, 232, 240)
-  doc.rect(qrX - 2, qrY - 2, qrSize + 4, qrSize + 4)
-
-  // QR Instruction Text
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(71, 85, 105)
-  doc.text('Verify this certificate by', qrX + qrSize / 2, qrY + qrSize + 6, { align: 'center' })
-  doc.text('scanning the QR code.', qrX + qrSize / 2, qrY + qrSize + 10, { align: 'center' })
-
-  // Footer divider line
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.4)
-  doc.line(margin + 10, 180, pageWidth - margin - 10, 180)
-
-  // Footer text
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(148, 163, 184)
-  doc.text(
-    'CaterCrew Platform • Official Certificate of Verification • Event Catering Staffing Network',
-    pageWidth / 2,
-    188,
-    { align: 'center' }
-  )
-
-  doc.setFontSize(7.5)
-  doc.setTextColor(5, 150, 105) // Emerald-600
-  doc.text(verifyUrl, pageWidth / 2, 193, { align: 'center' })
-
-  // Save PDF
-  const filename = `CaterCrew_Certificate_${worker.worker_code || 'verified'}.pdf`
+  // Save the downloaded PDF
+  const filename = `CaterCrew_Verification_${code.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
   doc.save(filename)
 }
