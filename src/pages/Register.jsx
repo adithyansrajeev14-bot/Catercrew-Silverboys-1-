@@ -163,17 +163,7 @@ export default function Register() {
 
     try {
       if (!isSupabaseConfigured) {
-        // Mock fallback if user hasn't hooked Supabase credentials yet
-        await new Promise((r) => setTimeout(r, 1000))
-        const mockCode = `CC-SLV-${Math.floor(100000 + Math.random() * 900000)}`
-        setRegisteredWorker({
-          worker_code: mockCode,
-          full_name: formData.fullName,
-          status: 'pending',
-          tier: 'silver',
-        })
-        setIsSubmitting(false)
-        return
+        throw new Error('Database is not connected. Please configure your Supabase credentials to submit real registrations.')
       }
 
       // 1. Upload Photo to public bucket 'photos'

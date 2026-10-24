@@ -40,22 +40,7 @@ export default function Status() {
 
     try {
       if (!isSupabaseConfigured) {
-        // Mock fallback for demo testing if Supabase is not yet connected
-        await new Promise((r) => setTimeout(r, 600))
-        if (code.includes('NOTFOUND')) {
-          setNotFound(true)
-        } else {
-          setWorker({
-            worker_code: code,
-            full_name: 'Rahul S. (Demo Staff)',
-            photo_path: null,
-            tier: 'silver',
-            status: code.includes('PENDING') ? 'pending' : 'verified',
-            verified_at: new Date().toISOString(),
-          })
-        }
-        setLoading(false)
-        return
+        throw new Error('Database is not connected. Please connect Supabase to look up real staff records.')
       }
 
       // Call security definer RPC function get_public_worker

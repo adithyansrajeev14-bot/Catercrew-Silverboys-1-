@@ -58,3 +58,59 @@ export async function getIdProofSignedUrl(path, expiresIn = 3600) {
   }
   return { url: data.signedUrl, error: null }
 }
+
+/**
+ * Check live connection status to Supabase
+ */
+export async function checkDatabaseConnection() {
+  if (!isSupabaseConfigured) {
+    return {
+      connected: false,
+      configured: false,
+      message: 'Supabase credentials missing (VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY)',
+      url: supabaseUrl || null,
+    }
+  }
+
+  try {
+    const start = performance.now()
+    const { error, status } = await supabase.from('workers').select('id', { count: 'exact', head: true })
+    const latency = Math.round(performance.now() - start)
+
+    if (error && status !== 200 && status !== 406 && status !== 0) {
+      if (error.code === '42P01') {
+        return {
+          connected: true,
+          configured: true,
+          tableMissing: true,
+          latency,
+          message: 'Connected to Supabase (workers table not found - run schema.sql)',
+          url: supabaseUrl,
+        }
+      }
+      return {
+        connected: false,
+        configured: true,
+        latency,
+        message: error.message || 'Database connection error',
+        url: supabaseUrl,
+      }
+    }
+
+    return {
+      connected: true,
+      configured: true,
+      latency,
+      message: `Active & connected (${latency}ms)`,
+      url: supabaseUrl,
+    }
+  } catch (err) {
+    return {
+      connected: false,
+      configured: true,
+      message: err.message || 'Unable to connect to database',
+      url: supabaseUrl,
+    }
+  }
+}
+

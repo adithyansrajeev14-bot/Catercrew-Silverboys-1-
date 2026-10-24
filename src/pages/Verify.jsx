@@ -32,20 +32,7 @@ export default function Verify() {
 
       try {
         if (!isSupabaseConfigured) {
-          // Demo fallback
-          await new Promise((r) => setTimeout(r, 500))
-          if (cleanCode.includes('NOTFOUND')) {
-            setNotFound(true)
-          } else {
-            setWorker({
-              worker_code: cleanCode,
-              full_name: 'Rahul S. (Demo Staff)',
-              photo_path: null,
-              tier: 'silver',
-              status: cleanCode.includes('PENDING') ? 'pending' : 'verified',
-              verified_at: new Date().toISOString(),
-            })
-          }
+          setNotFound(true)
           setLoading(false)
           return
         }

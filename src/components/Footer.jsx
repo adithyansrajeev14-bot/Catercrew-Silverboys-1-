@@ -35,9 +35,6 @@ export default function Footer() {
           <Link to="/status" className="hover:text-emerald-600 transition-colors">
             Check Status
           </Link>
-          <Link to="/admin" className="text-gray-400 hover:text-emerald-600 transition-colors">
-            Admin
-          </Link>
         </div>
       </div>
       <p className="mt-4 text-xs text-gray-400">

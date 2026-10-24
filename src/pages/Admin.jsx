@@ -12,60 +12,17 @@ import {
   RefreshCw,
   LogOut,
   AlertTriangle,
+  Database,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 import {
   supabase,
   isSupabaseConfigured,
   getPhotoPublicUrl,
+  checkDatabaseConnection,
 } from '../lib/supabase'
 import { TIERS } from '../lib/constants'
-
-const DEMO_WORKERS = [
-  {
-    id: 'demo-1',
-    worker_code: 'CC-SLV-000101',
-    tier: 'silver',
-    status: 'pending',
-    full_name: 'Anandhu Krishna',
-    dob: '2003-05-14',
-    height_cm: 175,
-    phone: '9847123456',
-    whatsapp: '9847123456',
-    district: 'Ernakulam',
-    area: 'Aluva',
-    travel_ok: true,
-    photo_path: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-    experience_years: 1.5,
-    has_uniform: true,
-    emergency_name: 'Krishna Pillai (Father)',
-    emergency_phone: '9847000111',
-    consent: true,
-    created_at: '2026-10-22T10:00:00.000Z',
-    verified_at: null,
-  },
-  {
-    id: 'demo-2',
-    worker_code: 'CC-SLV-000098',
-    tier: 'silver',
-    status: 'verified',
-    full_name: 'Rahul Joseph',
-    dob: '2001-11-20',
-    height_cm: 172,
-    phone: '9447112233',
-    whatsapp: '9447112233',
-    district: 'Kottayam',
-    area: 'Pala',
-    travel_ok: true,
-    photo_path: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
-    experience_years: 3,
-    has_uniform: true,
-    emergency_name: 'Joseph V. (Father)',
-    emergency_phone: '9447000222',
-    consent: true,
-    created_at: '2026-10-20T08:30:00.000Z',
-    verified_at: '2026-10-21T14:15:00.000Z',
-  },
-]
 
 export default function Admin() {
   const [session, setSession] = useState(null)
@@ -73,15 +30,26 @@ export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [checkingAdmin, setCheckingAdmin] = useState(false)
 
+  // Database Connection State
+  const [dbStatus, setDbStatus] = useState({
+    loading: true,
+    connected: false,
+    configured: isSupabaseConfigured,
+    message: 'Testing connection...',
+    url: null,
+    latency: null,
+  })
+
   // Auth form state
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [authError, setAuthError] = useState('')
 
-  // Dashboard state
-  const [workers, setWorkers] = useState(isSupabaseConfigured ? [] : DEMO_WORKERS)
+  // Dashboard state - ONLY actual data from database
+  const [workers, setWorkers] = useState([])
   const [loadingWorkers, setLoadingWorkers] = useState(false)
+  const [fetchError, setFetchError] = useState('')
   const [activeTab, setActiveTab] = useState('all') // all, pending, verified, suspended
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -90,13 +58,48 @@ export default function Admin() {
   const [actionLoading, setActionLoading] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
+  // Test database connection
+  const testDb = useCallback(async () => {
+    setDbStatus((prev) => ({ ...prev, loading: true }))
+    const res = await checkDatabaseConnection()
+    setDbStatus({
+      loading: false,
+      connected: res.connected,
+      configured: res.configured,
+      message: res.message,
+      url: res.url,
+      latency: res.latency,
+    })
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    checkDatabaseConnection().then((res) => {
+      if (active) {
+        setDbStatus({
+          loading: false,
+          connected: res.connected,
+          configured: res.configured,
+          message: res.message,
+          url: res.url,
+          latency: res.latency,
+        })
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   const fetchWorkers = useCallback(async () => {
     if (!isSupabaseConfigured) {
-      setWorkers(DEMO_WORKERS)
+      setWorkers([])
+      setFetchError('Database credentials are not configured in .env.')
       return
     }
 
     setLoadingWorkers(true)
+    setFetchError('')
     try {
       const { data, error } = await supabase
         .from('workers')
@@ -106,7 +109,8 @@ export default function Admin() {
       if (error) throw error
       setWorkers(data || [])
     } catch (err) {
-      console.error('Failed to fetch workers:', err)
+      console.error('Failed to fetch real workers from database:', err)
+      setFetchError(err.message || 'Error fetching records from database.')
     } finally {
       setLoadingWorkers(false)
     }
@@ -172,13 +176,9 @@ export default function Admin() {
 
     try {
       if (!isSupabaseConfigured) {
-        // In demo mode, simulate successful admin login
-        await new Promise((r) => setTimeout(r, 600))
-        setSession({ user: { id: 'demo-admin-id', email: email || 'admin@catercrew.in' } })
-        setIsAdmin(true)
-        setWorkers(DEMO_WORKERS)
-        setLoginLoading(false)
-        return
+        throw new Error(
+          'Supabase credentials are not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file to enable authentication.'
+        )
       }
 
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -216,20 +216,13 @@ export default function Admin() {
   const handleUpdateStatus = async (workerId, newStatus) => {
     setActionLoading(true)
     try {
+      if (!isSupabaseConfigured) {
+        throw new Error('Database is not configured.')
+      }
+
       const updates = {
         status: newStatus,
         verified_at: newStatus === 'verified' ? new Date().toISOString() : null,
-      }
-
-      if (!isSupabaseConfigured) {
-        setWorkers((prev) =>
-          prev.map((w) => (w.id === workerId ? { ...w, ...updates } : w))
-        )
-        if (selectedWorker?.id === workerId) {
-          setSelectedWorker((prev) => ({ ...prev, ...updates }))
-        }
-        setActionLoading(false)
-        return
       }
 
       const { data, error } = await supabase
@@ -257,14 +250,7 @@ export default function Admin() {
     setActionLoading(true)
     try {
       if (!isSupabaseConfigured) {
-        setWorkers((prev) =>
-          prev.map((w) => (w.id === workerId ? { ...w, tier: newTier } : w))
-        )
-        if (selectedWorker?.id === workerId) {
-          setSelectedWorker((prev) => ({ ...prev, tier: newTier }))
-        }
-        setActionLoading(false)
-        return
+        throw new Error('Database is not configured.')
       }
 
       const { data, error } = await supabase
@@ -292,11 +278,7 @@ export default function Admin() {
     setActionLoading(true)
     try {
       if (!isSupabaseConfigured) {
-        setWorkers((prev) => prev.filter((w) => w.id !== workerId))
-        setSelectedWorker(null)
-        setDeleteConfirmOpen(false)
-        setActionLoading(false)
-        return
+        throw new Error('Database is not configured.')
       }
 
       const { error } = await supabase.from('workers').delete().eq('id', workerId)
@@ -487,16 +469,55 @@ export default function Admin() {
             </button>
           </form>
 
-          {!isSupabaseConfigured && (
-            <div className="mt-6 pt-5 border-t border-gray-800 text-center">
-              <span className="text-xs text-emerald-300 font-semibold bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800/60">
-                Demo Mode Active
+          {/* Live Database Connection Status Card */}
+          <div className="mt-6 pt-5 border-t border-gray-800">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="text-gray-400 font-semibold flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5 text-gray-400" />
+                <span>Database Connection</span>
               </span>
-              <p className="text-xs text-gray-400 mt-2">
-                Clicking Sign In will enter demo mode with sample registration data.
-              </p>
+              <button
+                type="button"
+                onClick={testDb}
+                disabled={dbStatus.loading}
+                className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer transition-colors"
+                title="Test connection now"
+              >
+                <RefreshCw className={`w-3 h-3 ${dbStatus.loading ? 'animate-spin' : ''}`} />
+                <span>Test Live</span>
+              </button>
             </div>
-          )}
+
+            <div
+              className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                dbStatus.connected
+                  ? 'bg-emerald-950/50 border-emerald-800/80 text-emerald-300'
+                  : 'bg-rose-950/50 border-rose-800/80 text-rose-300'
+              }`}
+            >
+              {dbStatus.connected ? (
+                <Wifi className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <span>{dbStatus.connected ? 'Connected to Supabase' : 'Database Offline / Unconfigured'}</span>
+                  {dbStatus.latency && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-900/80 text-emerald-200 font-mono">
+                      {dbStatus.latency}ms
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] opacity-90 mt-0.5">{dbStatus.message}</p>
+                {dbStatus.url && (
+                  <p className="text-[10px] opacity-75 font-mono truncate mt-1">
+                    Host: {dbStatus.url}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -563,11 +584,30 @@ export default function Admin() {
               style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
             />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full">
                   ADMINISTRATOR
                 </span>
                 <span className="text-xs text-gray-400">{session.user.email}</span>
+                {/* Live Database status pill */}
+                <div
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                    dbStatus.connected
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/70'
+                      : 'bg-rose-950/80 text-rose-300 border-rose-800/70'
+                  }`}
+                  title={dbStatus.message}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      dbStatus.connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+                    }`}
+                  />
+                  <span>{dbStatus.connected ? 'DB Online' : 'DB Disconnected'}</span>
+                  {dbStatus.latency && (
+                    <span className="text-[10px] opacity-80 font-mono">({dbStatus.latency}ms)</span>
+                  )}
+                </div>
               </div>
               <h1 className="text-xl font-extrabold text-white mt-0.5 tracking-tight">
                 Catering Staff Registrations
@@ -577,12 +617,15 @@ export default function Admin() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={fetchWorkers}
+              onClick={() => {
+                testDb()
+                fetchWorkers()
+              }}
               disabled={loadingWorkers}
               className="p-2.5 rounded-xl border border-gray-700 bg-gray-800 hover:bg-gray-750 text-gray-200 transition-colors cursor-pointer"
-              title="Refresh records"
+              title="Refresh database records & connection"
             >
-              <RefreshCw className={`w-4 h-4 ${loadingWorkers ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loadingWorkers || dbStatus.loading ? 'animate-spin' : ''}`} />
             </button>
 
             <button
@@ -603,6 +646,21 @@ export default function Admin() {
             </button>
           </div>
         </div>
+
+        {fetchError && (
+          <div className="mb-6 p-4 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-200 text-sm flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+              <span>{fetchError}</span>
+            </div>
+            <button
+              onClick={fetchWorkers}
+              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-rose-900 hover:bg-rose-800 text-white cursor-pointer"
+            >
+              Retry Query
+            </button>
+          </div>
+        )}
 
         {/* Metric Cards (Card Dashboard) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -716,8 +774,23 @@ export default function Admin() {
               <tbody className="divide-y divide-gray-800 font-medium text-gray-300">
                 {filteredWorkers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-500">
-                      No registrations found matching criteria.
+                    <td colSpan={7} className="text-center py-14 text-gray-400">
+                      {loadingWorkers ? (
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <span className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-sm">Fetching real worker registrations from database...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-1.5">
+                          <Database className="w-6 h-6 text-gray-600 mb-1" />
+                          <p className="font-semibold text-gray-300">No worker registrations found</p>
+                          <p className="text-xs text-gray-500">
+                            {workers.length === 0
+                              ? 'The database table is currently empty. Registrations submitted via /register will appear here in real-time.'
+                              : 'No registrations matched your active filter/search query.'}
+                          </p>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ) : (

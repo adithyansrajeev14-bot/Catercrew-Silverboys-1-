@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { ShieldCheck, UserPlus, Lock } from 'lucide-react'
+import { ShieldCheck, UserPlus } from 'lucide-react'
 
 export default function Navbar() {
   const location = useLocation()
@@ -52,19 +52,6 @@ export default function Navbar() {
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Verify</span>
-          </Link>
-
-          <Link
-            to="/admin"
-            className={`p-2 sm:px-3 sm:py-2 rounded-xl text-sm font-medium transition-all duration-150 flex items-center gap-1 ${
-              isActive('/admin')
-                ? 'text-emerald-600 bg-emerald-50'
-                : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-            }`}
-            title="Admin Login"
-          >
-            <Lock className="w-4 h-4" />
-            <span className="hidden md:inline text-xs">Admin</span>
           </Link>
         </nav>
       </div>
