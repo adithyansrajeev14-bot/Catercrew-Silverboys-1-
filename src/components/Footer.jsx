@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { BrandWithChefHat } from './ChefHatLogo'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -7,9 +8,7 @@ export default function Footer() {
     <footer className="mt-auto border-t border-gray-100 bg-white py-8 px-4 text-center text-sm text-gray-500">
       <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="font-black text-xl sm:text-2xl text-gray-900 tracking-tight">
-            Cater<span className="text-emerald-600">Crew</span>
-          </span>
+          <BrandWithChefHat size="text-xl sm:text-2xl" />
           <span className="text-gray-300">•</span>
           <span>Kerala Catering Staff Network</span>
         </div>
@@ -27,7 +26,7 @@ export default function Footer() {
         </div>
       </div>
       <p className="mt-4 text-xs text-gray-400">
-        &copy; {CURRENT_YEAR} CaterCrew. Professional Silver Staff Verification.
+        &copy; {CURRENT_YEAR} CaterCrew. Professional Staff Verification.
       </p>
     </footer>
   )

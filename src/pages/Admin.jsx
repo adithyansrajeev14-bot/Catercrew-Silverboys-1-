@@ -23,6 +23,7 @@ import {
   checkDatabaseConnection,
 } from '../lib/supabase'
 import { TIERS } from '../lib/constants'
+import { BrandWithChefHat } from '../components/ChefHatLogo'
 
 export default function Admin() {
   const [session, setSession] = useState(null)
@@ -406,9 +407,7 @@ export default function Admin() {
           </div>
 
           <div className="text-center mb-4">
-            <span className="text-3xl font-black text-white tracking-tight">
-              Cater<span className="text-emerald-400">Crew</span>
-            </span>
+            <BrandWithChefHat size="text-3xl" dark={true} />
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white text-center tracking-tight">
@@ -574,9 +573,7 @@ export default function Admin() {
         {/* Top Admin Bar */}
         <div className="bg-gray-900 rounded-2xl shadow-xl border border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-6 py-4">
           <div className="flex items-center gap-4">
-            <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Cater<span className="text-emerald-400">Crew</span>
-            </span>
+            <BrandWithChefHat size="text-2xl sm:text-3xl" dark={true} />
             <div className="border-l border-gray-800 pl-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full">
