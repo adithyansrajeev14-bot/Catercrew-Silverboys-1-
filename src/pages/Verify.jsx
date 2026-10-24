@@ -124,14 +124,6 @@ export default function Verify() {
     <div className="max-w-md mx-auto px-4 py-8 sm:py-14">
       {/* Top CaterCrew verification seal */}
       <div className="text-center mb-6">
-        <div className="flex justify-center mb-3">
-          <img
-            src="/catercrew-logo.jpg"
-            alt="CaterCrew"
-            className="h-12 w-auto object-contain"
-            style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
-          />
-        </div>
         <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span>Official Verification Registry</span>

@@ -401,17 +401,14 @@ export default function Admin() {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 sm:py-20 bg-gray-950">
         <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-md w-full">
-          <div className="w-12 h-12 bg-gray-800 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-700 shadow-inner">
+          <div className="w-12 h-12 bg-gray-800 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-gray-700 shadow-inner">
             <Lock className="w-6 h-6" />
           </div>
 
-          <div className="flex justify-center mb-4">
-            <img
-              src="/catercrew-logo.jpg"
-              alt="CaterCrew"
-              className="h-16 w-auto object-contain"
-              style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
-            />
+          <div className="text-center mb-4">
+            <span className="text-3xl font-black text-white tracking-tight">
+              Cater<span className="text-emerald-400">Crew</span>
+            </span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white text-center tracking-tight">
@@ -577,13 +574,10 @@ export default function Admin() {
         {/* Top Admin Bar */}
         <div className="bg-gray-900 rounded-2xl shadow-xl border border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-6 py-4">
           <div className="flex items-center gap-4">
-            <img
-              src="/catercrew-logo.jpg"
-              alt="CaterCrew"
-              className="h-10 w-auto object-contain"
-              style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
-            />
-            <div>
+            <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              Cater<span className="text-emerald-400">Crew</span>
+            </span>
+            <div className="border-l border-gray-800 pl-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full">
                   ADMINISTRATOR

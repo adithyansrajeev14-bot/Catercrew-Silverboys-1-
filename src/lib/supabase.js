@@ -1,7 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || ''
+const DEFAULT_SUPABASE_URL = 'https://euamrlqdpkzpnrhftjro.supabase.co'
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_966dmDHUvo_xg9rV7Hj0Hw_o5OdUncc'
+
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL?.trim() ||
+  DEFAULT_SUPABASE_URL
+
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ||
+  DEFAULT_SUPABASE_KEY
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
@@ -10,8 +19,6 @@ export const isSupabaseConfigured = Boolean(
   !supabaseUrl.includes('your-project')
 )
 
-// Fallback dummy URL so createClient doesn't throw a fatal module evaluation error
-// if the developer opens the app before configuring their .env file
 const safeUrl = isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co'
 const safeAnonKey = isSupabaseConfigured ? supabaseAnonKey : 'placeholder-anon-key'
 

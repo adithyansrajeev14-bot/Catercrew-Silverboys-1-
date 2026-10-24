@@ -127,14 +127,6 @@ export default function Status() {
     <div className="max-w-2xl mx-auto px-4 py-8 sm:py-14">
       {/* Search Header Box */}
       <div className="text-center mb-8">
-        <div className="flex justify-center mb-4">
-          <img
-            src="/catercrew-logo.jpg"
-            alt="CaterCrew"
-            className="h-12 w-auto object-contain"
-            style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
-          />
-        </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">
           Registration Status
         </h1>

@@ -26,18 +26,8 @@ export default function Home() {
         <span>Kerala Catering Staff Verification Portal</span>
       </div>
 
-      {/* CaterCrew Logo */}
-      <div className="flex justify-center mb-4">
-        <img
-          src="/catercrew-logo.jpg"
-          alt="CaterCrew"
-          className="h-16 sm:h-20 w-auto object-contain"
-          style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
-        />
-      </div>
-
-      {/* Main Brand & Heading */}
-      <h1 className="text-4xl sm:text-6xl font-black text-gray-900 tracking-tight leading-tight">
+      {/* Main Brand & Heading (Logo removed, text enlarged) */}
+      <h1 className="text-6xl sm:text-8xl font-black text-gray-900 tracking-tight leading-tight">
         Cater<span className="text-emerald-600">Crew</span>
       </h1>
 
