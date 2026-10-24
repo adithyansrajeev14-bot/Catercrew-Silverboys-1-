@@ -5,14 +5,12 @@ export default function Home() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 sm:py-20 text-center">
       {/* CaterCrew Official Brand Logo Image */}
-      <div className="mb-6 flex justify-center">
-        <div className="inline-block p-2 sm:p-4 rounded-3xl bg-black border border-gray-900 shadow-2xl max-w-md sm:max-w-xl w-full">
-          <img
-            src="/assets/aistudio/WhatsApp_Image_2026-10-24_at_9.48.49_PM_59caf743.jpeg"
-            alt="CaterCrew - Earn it."
-            className="w-full h-auto rounded-2xl object-contain mx-auto"
-          />
-        </div>
+      <div className="mb-4 sm:mb-6 flex justify-center">
+        <img
+          src="/logo.png"
+          alt="CaterCrew - Find it. Work it. Earn it."
+          className="w-full max-w-sm sm:max-w-md md:max-w-lg h-auto object-contain mx-auto"
+        />
       </div>
 
       {/* One-line Description */}
