@@ -1,17 +1,18 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle2 } from 'lucide-react'
-import { BrandWithChefHat } from '../components/ChefHatLogo'
 
 export default function Home() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12 sm:py-20 text-center">
-      {/* Main Brand with Chef Hat on 'C' & 'Earn it.' tagline like the attached reference */}
-      <div className="mb-6">
-        <BrandWithChefHat
-          size="text-6xl sm:text-8xl"
-          showTagline={true}
-          taglineSize="text-lg sm:text-xl"
-        />
+      {/* CaterCrew Official Brand Logo Image */}
+      <div className="mb-6 flex justify-center">
+        <div className="inline-block p-2 sm:p-4 rounded-3xl bg-black border border-gray-900 shadow-2xl max-w-md sm:max-w-xl w-full">
+          <img
+            src="/assets/aistudio/WhatsApp_Image_2026-10-24_at_9.48.49_PM_59caf743.jpeg"
+            alt="CaterCrew - Earn it."
+            className="w-full h-auto rounded-2xl object-contain mx-auto"
+          />
+        </div>
       </div>
 
       {/* One-line Description */}
