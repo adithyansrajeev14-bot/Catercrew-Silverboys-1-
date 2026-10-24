@@ -11,12 +11,18 @@ export default function Navbar() {
       <div className="max-w-5xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-3 group">
-          <img
-            src="/catercrew-logo.jpg"
-            alt="CaterCrew"
-            className="h-10 sm:h-12 w-auto object-contain brightness-[50] invert saturate-[3] hue-rotate-[100deg] group-hover:opacity-80 transition-opacity"
-            style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
-          />
+          {location.pathname !== '/register' ? (
+            <img
+              src="/catercrew-logo.jpg"
+              alt="CaterCrew"
+              className="h-10 sm:h-12 w-auto object-contain brightness-[50] invert saturate-[3] hue-rotate-[100deg] group-hover:opacity-80 transition-opacity"
+              style={{ filter: 'brightness(0) invert(1) sepia(1) saturate(3) hue-rotate(100deg)' }}
+            />
+          ) : (
+            <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight group-hover:text-emerald-700 transition-colors">
+              Cater<span className="text-emerald-600">Crew</span>
+            </span>
+          )}
           <span className="text-[10px] tracking-wider uppercase font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
             Silver
           </span>

@@ -417,9 +417,9 @@ export default function Admin() {
   // 2. Unauthenticated Login Screen
   if (!session) {
     return (
-      <div className="max-w-md mx-auto px-4 py-12 sm:py-20">
-        <div className="bg-white border-2 border-gray-100 rounded-3xl p-6 sm:p-8 shadow-sm">
-          <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 sm:py-20 bg-gray-950">
+        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-md w-full">
+          <div className="w-12 h-12 bg-gray-800 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-700 shadow-inner">
             <Lock className="w-6 h-6" />
           </div>
 
@@ -432,22 +432,22 @@ export default function Admin() {
             />
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 text-center tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white text-center tracking-tight">
             Admin Login
           </h1>
-          <p className="text-gray-500 text-sm text-center mt-1 mb-6">
+          <p className="text-gray-400 text-sm text-center mt-1 mb-6">
             Sign in to review and verify catering staff registrations.
           </p>
 
           {authError && (
-            <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm rounded-xl">
+            <div className="mb-5 p-3.5 bg-rose-950/60 border border-rose-800/80 text-rose-200 text-xs sm:text-sm rounded-xl">
               {authError}
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-1">
+              <label className="block text-sm font-semibold text-gray-300 mb-1">
                 Admin Email
               </label>
               <input
@@ -456,12 +456,12 @@ export default function Admin() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@catercrew.in"
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-emerald-600 focus:outline-none text-base"
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-800 bg-gray-950 focus:border-emerald-500 focus:outline-none text-white text-base placeholder-gray-600"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-1">
+              <label className="block text-sm font-semibold text-gray-300 mb-1">
                 Password
               </label>
               <input
@@ -470,14 +470,14 @@ export default function Admin() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-emerald-600 focus:outline-none text-base"
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-800 bg-gray-950 focus:border-emerald-500 focus:outline-none text-white text-base placeholder-gray-600"
               />
             </div>
 
             <button
               type="submit"
               disabled={loginLoading}
-              className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 text-white font-bold py-3.5 px-6 rounded-xl text-base transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3.5 px-6 rounded-xl text-base transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50"
             >
               {loginLoading ? (
                 <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -488,11 +488,11 @@ export default function Admin() {
           </form>
 
           {!isSupabaseConfigured && (
-            <div className="mt-6 pt-5 border-t border-gray-100 text-center">
-              <span className="text-xs text-emerald-800 font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <div className="mt-6 pt-5 border-t border-gray-800 text-center">
+              <span className="text-xs text-emerald-300 font-semibold bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800/60">
                 Demo Mode Active
               </span>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-400 mt-2">
                 Clicking Sign In will enter demo mode with sample registration data.
               </p>
             </div>
@@ -505,43 +505,45 @@ export default function Admin() {
   // 3. Authenticated but NOT in `admins` table
   if (session && !isAdmin && !checkingAdmin) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4">
-          <AlertTriangle className="w-8 h-8" />
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
-          Admin Authorization Required
-        </h1>
-        <p className="text-gray-600 text-sm sm:text-base mt-2">
-          Your account (<strong className="text-gray-900">{session.user.email}</strong>) is
-          authenticated, but has not been added to the CaterCrew <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">admins</code> table yet.
-        </p>
-
-        {/* Step-by-step SQL instruction */}
-        <div className="mt-6 p-5 bg-gray-50 border border-gray-200 rounded-2xl text-left text-xs font-mono">
-          <p className="text-gray-500 font-sans mb-1 font-semibold">
-            To grant access, run this in your Supabase SQL Editor:
-          </p>
-          <div className="bg-gray-900 text-emerald-400 p-3 rounded-lg overflow-x-auto select-all">
-            insert into public.admins (user_id) values (&apos;{session.user.id}&apos;) on conflict do nothing;
+      <div className="min-h-[80vh] flex items-center justify-center px-4 py-16 bg-gray-950">
+        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl max-w-lg w-full text-center">
+          <div className="w-16 h-16 bg-gray-800 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-700">
+            <AlertTriangle className="w-8 h-8" />
           </div>
-        </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            Admin Authorization Required
+          </h1>
+          <p className="text-gray-300 text-sm sm:text-base mt-2">
+            Your account (<strong className="text-white">{session.user.email}</strong>) is
+            authenticated, but has not been added to the CaterCrew <code className="font-mono bg-gray-800 text-emerald-400 px-1 py-0.5 rounded">admins</code> table yet.
+          </p>
 
-        <div className="mt-6 flex justify-center gap-3">
-          <button
-            onClick={() => checkAdminStatus(session.user.id)}
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Check Authorization Again</span>
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
+          {/* Step-by-step SQL instruction */}
+          <div className="mt-6 p-5 bg-gray-950 border border-gray-800 rounded-2xl text-left text-xs font-mono">
+            <p className="text-gray-400 font-sans mb-1 font-semibold">
+              To grant access, run this in your Supabase SQL Editor:
+            </p>
+            <div className="bg-gray-900 text-emerald-400 p-3 rounded-lg overflow-x-auto select-all border border-gray-800">
+              insert into public.admins (user_id) values (&apos;{session.user.id}&apos;) on conflict do nothing;
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-center gap-3">
+            <button
+              onClick={() => checkAdminStatus(session.user.id)}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Check Authorization Again</span>
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-1.5 bg-gray-800 hover:bg-gray-750 text-gray-200 font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer border border-gray-700"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -549,10 +551,10 @@ export default function Admin() {
 
   // 4. ADMIN DASHBOARD
   return (
-    <div className="min-h-screen bg-gray-50/70">
+    <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-6xl mx-auto px-4 py-8 sm:py-10">
         {/* Top Admin Bar */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-6 py-4">
+        <div className="bg-gray-900 rounded-2xl shadow-xl border border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-6 py-4">
           <div className="flex items-center gap-4">
             <img
               src="/catercrew-logo.jpg"
@@ -562,12 +564,12 @@ export default function Admin() {
             />
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full">
                   ADMINISTRATOR
                 </span>
-                <span className="text-xs text-gray-500">{session.user.email}</span>
+                <span className="text-xs text-gray-400">{session.user.email}</span>
               </div>
-              <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight">
+              <h1 className="text-xl font-extrabold text-white mt-0.5 tracking-tight">
                 Catering Staff Registrations
               </h1>
             </div>
@@ -577,7 +579,7 @@ export default function Admin() {
             <button
               onClick={fetchWorkers}
               disabled={loadingWorkers}
-              className="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl border border-gray-700 bg-gray-800 hover:bg-gray-750 text-gray-200 transition-colors cursor-pointer"
               title="Refresh records"
             >
               <RefreshCw className={`w-4 h-4 ${loadingWorkers ? 'animate-spin' : ''}`} />
@@ -585,7 +587,7 @@ export default function Admin() {
 
             <button
               onClick={handleExportCSV}
-              className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors cursor-pointer shadow-sm"
             >
               <Download className="w-4 h-4" />
               <span>Export to CSV</span>
@@ -593,7 +595,7 @@ export default function Admin() {
 
             <button
               onClick={handleSignOut}
-              className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-800 text-sm px-3 py-2 rounded-xl transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-2 rounded-xl transition-colors cursor-pointer"
               title="Sign out"
             >
               <LogOut className="w-4 h-4" />
@@ -602,260 +604,260 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Metric Cards */}
+        {/* Metric Cards (Card Dashboard) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
-            activeTab === 'all'
-              ? 'border-gray-900 bg-gray-900 text-white'
-              : 'border-gray-100 bg-white hover:border-gray-200 text-gray-800'
-          }`}
-        >
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-70">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
+              activeTab === 'all'
+                ? 'border-emerald-500 bg-gray-900 text-white ring-1 ring-emerald-500/40'
+                : 'border-gray-800 bg-gray-900/90 hover:border-gray-700 text-gray-200'
+            }`}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
               Total Staff
             </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1">{counts.all}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-white">{counts.all}</p>
           </button>
 
           <button
             onClick={() => setActiveTab('pending')}
-            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
               activeTab === 'pending'
-                ? 'border-emerald-600 bg-emerald-600 text-white'
-                : 'border-gray-100 bg-white hover:border-emerald-200 text-emerald-900 shadow-sm'
+                ? 'border-amber-500 bg-amber-950/40 text-amber-200 ring-1 ring-amber-500/40'
+                : 'border-gray-800 bg-gray-900/90 hover:border-amber-500/40 text-amber-300'
             }`}
           >
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-400/80">
               Pending Review
             </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1">{counts.pending}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-amber-300">{counts.pending}</p>
           </button>
 
           <button
             onClick={() => setActiveTab('verified')}
-            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
               activeTab === 'verified'
-                ? 'border-emerald-800 bg-emerald-800 text-white'
-                : 'border-gray-100 bg-white hover:border-emerald-200 text-emerald-900 shadow-sm'
+                ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200 ring-1 ring-emerald-500/40'
+                : 'border-gray-800 bg-gray-900/90 hover:border-emerald-500/40 text-emerald-300'
             }`}
           >
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400/80">
               Verified Active
             </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1">{counts.verified}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-emerald-300">{counts.verified}</p>
           </button>
 
           <button
             onClick={() => setActiveTab('suspended')}
-            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
               activeTab === 'suspended'
-                ? 'border-rose-600 bg-rose-600 text-white'
-                : 'border-gray-100 bg-white hover:border-rose-200 text-rose-900 shadow-sm'
+                ? 'border-rose-500 bg-rose-950/40 text-rose-200 ring-1 ring-rose-500/40'
+                : 'border-gray-800 bg-gray-900/90 hover:border-rose-500/40 text-rose-300'
             }`}
           >
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
+            <span className="text-xs font-semibold uppercase tracking-wider text-rose-400/80">
               Suspended
             </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1">{counts.suspended}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-rose-300">{counts.suspended}</p>
           </button>
         </div>
 
         {/* Filter Tabs & Search Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-2xl overflow-x-auto text-sm">
-          {[
-            { id: 'all', label: `All (${counts.all})` },
-            { id: 'pending', label: `Pending (${counts.pending})` },
-            { id: 'verified', label: `Verified (${counts.verified})` },
-            { id: 'suspended', label: `Suspended (${counts.suspended})` },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-1.5 rounded-xl font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                activeTab === tab.id
-                  ? 'bg-white text-gray-900 shadow-sm font-bold'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <div className="flex items-center gap-1.5 p-1 bg-gray-900 border border-gray-800 rounded-2xl overflow-x-auto text-sm">
+            {[
+              { id: 'all', label: `All (${counts.all})` },
+              { id: 'pending', label: `Pending (${counts.pending})` },
+              { id: 'verified', label: `Verified (${counts.verified})` },
+              { id: 'suspended', label: `Suspended (${counts.suspended})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3 py-1.5 rounded-xl font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-gray-800 text-emerald-400 shadow-sm font-bold border border-gray-700'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search name, phone, ID..."
+              className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-800 bg-gray-900 rounded-xl focus:outline-none focus:border-emerald-500 text-white placeholder-gray-500"
+            />
+          </div>
         </div>
 
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search name, phone, ID..."
-            className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-600"
-          />
-        </div>
-        </div>
-
-        {/* Table of Registrations */}
-        <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500 font-semibold">
-              <tr>
-                <th className="py-3.5 px-4">Staff Member</th>
-                <th className="py-3.5 px-4">Worker ID</th>
-                <th className="py-3.5 px-4">Phone</th>
-                <th className="py-3.5 px-4">District / Area</th>
-                <th className="py-3.5 px-4">Tier</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
-              {filteredWorkers.length === 0 ? (
+        {/* Table of Registrations Card */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-950 border-b border-gray-800 text-xs uppercase tracking-wider text-gray-400 font-semibold">
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400">
-                    No registrations found matching criteria.
-                  </td>
+                  <th className="py-3.5 px-4">Staff Member</th>
+                  <th className="py-3.5 px-4">Worker ID</th>
+                  <th className="py-3.5 px-4">Phone</th>
+                  <th className="py-3.5 px-4">District / Area</th>
+                  <th className="py-3.5 px-4">Tier</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
-              ) : (
-                filteredWorkers.map((w) => {
-                  const photoUrl = getPhotoPublicUrl(w.photo_path)
-                  const tier = TIERS[w.tier] || TIERS.silver
-                  const isVerified = w.status === 'verified'
-                  const isPending = w.status === 'pending'
-                  const isSuspended = w.status === 'suspended'
+              </thead>
+              <tbody className="divide-y divide-gray-800 font-medium text-gray-300">
+                {filteredWorkers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-gray-500">
+                      No registrations found matching criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredWorkers.map((w) => {
+                    const photoUrl = getPhotoPublicUrl(w.photo_path)
+                    const tier = TIERS[w.tier] || TIERS.silver
+                    const isVerified = w.status === 'verified'
+                    const isPending = w.status === 'pending'
+                    const isSuspended = w.status === 'suspended'
 
-                  return (
-                    <tr
-                      key={w.id}
-                      onClick={() => handleOpenDetail(w)}
-                      className="hover:bg-emerald-50/40 cursor-pointer transition-colors"
-                    >
-                      {/* Name & Photo */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          {photoUrl ? (
-                            <img
-                              src={photoUrl}
-                              alt=""
-                              className="w-10 h-10 rounded-full object-cover border border-emerald-400 bg-gray-100 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
-                              {w.full_name?.charAt(0) || 'C'}
+                    return (
+                      <tr
+                        key={w.id}
+                        onClick={() => handleOpenDetail(w)}
+                        className="hover:bg-gray-800/60 cursor-pointer transition-colors"
+                      >
+                        {/* Name & Photo */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            {photoUrl ? (
+                              <img
+                                src={photoUrl}
+                                alt=""
+                                className="w-10 h-10 rounded-full object-cover border border-emerald-500/60 bg-gray-800 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gray-800 text-emerald-400 border border-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                {w.full_name?.charAt(0) || 'C'}
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-bold text-white">{w.full_name}</p>
+                              <p className="text-xs text-gray-400">
+                                {w.height_cm} cm • {w.experience_years} yrs exp
+                              </p>
                             </div>
-                          )}
-                          <div>
-                            <p className="font-bold text-gray-900">{w.full_name}</p>
-                            <p className="text-xs text-gray-400">
-                              {w.height_cm} cm • {w.experience_years} yrs exp
-                            </p>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Code */}
-                      <td className="py-3 px-4 font-mono font-bold text-gray-900 text-xs sm:text-sm">
-                        {w.worker_code}
-                      </td>
+                        {/* Code */}
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-400 text-xs sm:text-sm">
+                          {w.worker_code}
+                        </td>
 
-                      {/* Phone */}
-                      <td className="py-3 px-4 font-mono text-xs sm:text-sm text-gray-600">
-                        {w.phone}
-                      </td>
+                        {/* Phone */}
+                        <td className="py-3 px-4 font-mono text-xs sm:text-sm text-gray-300">
+                          {w.phone}
+                        </td>
 
-                      {/* District */}
-                      <td className="py-3 px-4 text-xs sm:text-sm">
-                        <span className="font-semibold text-gray-800">{w.district}</span>
-                        <span className="text-gray-400 text-xs block truncate max-w-[120px]">
-                          {w.area}
-                        </span>
-                      </td>
-
-                      {/* Tier */}
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${tier.badgeClass}`}
-                        >
-                          {tier.label}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-4">
-                        {isVerified && (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                            <span>Verified</span>
+                        {/* District */}
+                        <td className="py-3 px-4 text-xs sm:text-sm">
+                          <span className="font-semibold text-gray-200">{w.district}</span>
+                          <span className="text-gray-400 text-xs block truncate max-w-[120px]">
+                            {w.area}
                           </span>
-                        )}
-                        {isPending && (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                            <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Pending</span>
-                          </span>
-                        )}
-                        {isSuspended && (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
-                            <AlertOctagon className="w-3.5 h-3.5" />
-                            <span>Suspended</span>
-                          </span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Action */}
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenDetail(w)
-                          }}
-                          className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-white text-xs font-semibold text-gray-700 transition-colors"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                        {/* Tier */}
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${tier.badgeClass}`}
+                          >
+                            {tier.label}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-4">
+                          {isVerified && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-700/60 px-2.5 py-0.5 rounded-full">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Verified</span>
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-300 bg-amber-950/70 border border-amber-700/60 px-2.5 py-0.5 rounded-full">
+                              <Clock className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Pending</span>
+                            </span>
+                          )}
+                          {isSuspended && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-300 bg-rose-950/70 border border-rose-700/60 px-2.5 py-0.5 rounded-full">
+                              <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Suspended</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Action */}
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenDetail(w)
+                            }}
+                            className="px-3 py-1.5 rounded-lg border border-gray-700 hover:border-emerald-500 bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 hover:text-white transition-colors cursor-pointer"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      {/* DETAIL MODAL */}
+      {/* DETAIL MODAL CARD */}
       {selectedWorker && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl relative border border-gray-100">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-gray-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl relative border border-gray-800 text-gray-100">
             {/* Close Button */}
             <button
               onClick={() => setSelectedWorker(null)}
-              className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
             {/* Modal Header */}
-            <div className="flex items-start gap-4 border-b border-gray-100 pb-5">
+            <div className="flex items-start gap-4 border-b border-gray-800 pb-5">
               {selectedWorker.photo_path ? (
                 <img
                   src={getPhotoPublicUrl(selectedWorker.photo_path)}
                   alt=""
-                  className="w-16 h-20 rounded-xl object-cover border-2 border-emerald-500 bg-gray-100 shrink-0"
+                  className="w-16 h-20 rounded-xl object-cover border-2 border-emerald-500/80 bg-gray-800 shrink-0"
                 />
               ) : (
-                <div className="w-16 h-20 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                <div className="w-16 h-20 rounded-xl bg-gray-800 border border-gray-700 text-emerald-400 flex items-center justify-center shrink-0">
                   <User className="w-8 h-8" />
                 </div>
               )}
 
               <div>
-                <span className="font-mono text-xs font-bold text-emerald-700 tracking-wider">
+                <span className="font-mono text-xs font-bold text-emerald-400 tracking-wider">
                   {selectedWorker.worker_code}
                 </span>
-                <h2 className="text-2xl font-black text-gray-900">
+                <h2 className="text-2xl font-black text-white">
                   {selectedWorker.full_name}
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
@@ -869,10 +871,10 @@ export default function Admin() {
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold capitalize ${
                       selectedWorker.status === 'verified'
-                        ? 'bg-emerald-100 text-emerald-800'
+                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
                         : selectedWorker.status === 'suspended'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        ? 'bg-rose-950/80 text-rose-300 border border-rose-700/60'
+                        : 'bg-amber-950/80 text-amber-300 border border-amber-700/60'
                     }`}
                   >
                     {selectedWorker.status}
@@ -884,14 +886,14 @@ export default function Admin() {
             {/* Details Grid */}
             <div className="py-5 space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-50 rounded-xl">
+                <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                   <span className="text-xs text-gray-400 block font-medium">Date of Birth</span>
-                  <span className="font-semibold text-gray-900">{selectedWorker.dob}</span>
+                  <span className="font-semibold text-white">{selectedWorker.dob}</span>
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-xl">
+                <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                   <span className="text-xs text-gray-400 block font-medium">Height</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-white">
                     {selectedWorker.height_cm} cm
                   </span>
                 </div>
@@ -899,55 +901,55 @@ export default function Admin() {
 
               {/* Contact info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-50 rounded-xl">
+                <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                   <span className="text-xs text-gray-400 block font-medium">Phone Number</span>
-                  <span className="font-mono font-bold text-gray-900">{selectedWorker.phone}</span>
+                  <span className="font-mono font-bold text-white">{selectedWorker.phone}</span>
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-xl">
+                <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                   <span className="text-xs text-gray-400 block font-medium">WhatsApp</span>
-                  <span className="font-mono font-bold text-gray-900">
+                  <span className="font-mono font-bold text-white">
                     {selectedWorker.whatsapp}
                   </span>
                 </div>
               </div>
 
               {/* Location info */}
-              <div className="p-3 bg-gray-50 rounded-xl">
+              <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                 <span className="text-xs text-gray-400 block font-medium">Location</span>
-                <span className="font-semibold text-gray-900">
+                <span className="font-semibold text-white">
                   {selectedWorker.area}, {selectedWorker.district}
                 </span>
-                <span className="text-xs text-gray-500 block mt-0.5">
+                <span className="text-xs text-gray-300 block mt-0.5">
                   Travel to other districts:{' '}
-                  <strong>{selectedWorker.travel_ok ? 'Yes, willing' : 'No, home only'}</strong>
+                  <strong className="text-emerald-400">{selectedWorker.travel_ok ? 'Yes, willing' : 'No, home only'}</strong>
                 </span>
               </div>
 
-              {/* Experience only (no uniform) */}
+              {/* Experience only */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-3 bg-gray-50 rounded-xl">
+                <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                   <span className="text-xs text-gray-400 block font-medium">Catering Experience</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-white">
                     {selectedWorker.experience_years} years
                   </span>
                 </div>
               </div>
 
               {/* Emergency Contact */}
-              <div className="p-3 bg-gray-50 rounded-xl">
+              <div className="p-3 bg-gray-800/80 border border-gray-700/60 rounded-xl">
                 <span className="text-xs text-gray-400 block font-medium">Emergency Contact</span>
-                <span className="font-semibold text-gray-900">
+                <span className="font-semibold text-white">
                   {selectedWorker.emergency_name}
                 </span>
-                <span className="font-mono text-gray-600 block text-xs mt-0.5">
+                <span className="font-mono text-gray-300 block text-xs mt-0.5">
                   Phone: {selectedWorker.emergency_phone}
                 </span>
               </div>
             </div>
 
             {/* ACTION BUTTONS (VERIFY / SUSPEND / TIER / REJECT) */}
-            <div className="border-t border-gray-100 pt-5 space-y-3">
+            <div className="border-t border-gray-800 pt-5 space-y-3">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
                 Administrative Actions
               </span>
@@ -958,7 +960,7 @@ export default function Admin() {
                   <button
                     onClick={() => handleUpdateStatus(selectedWorker.id, 'verified')}
                     disabled={actionLoading}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer shadow-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>Verify Staff Member</span>
@@ -970,7 +972,7 @@ export default function Admin() {
                   <button
                     onClick={() => handleUpdateStatus(selectedWorker.id, 'suspended')}
                     disabled={actionLoading}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors cursor-pointer shadow-sm"
                   >
                     <AlertOctagon className="w-4 h-4" />
                     <span>Suspend</span>
@@ -982,7 +984,7 @@ export default function Admin() {
                   <button
                     onClick={() => handleUpdateStatus(selectedWorker.id, 'pending')}
                     disabled={actionLoading}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl text-sm transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl text-sm transition-colors cursor-pointer border border-gray-700"
                   >
                     <Clock className="w-4 h-4" />
                     <span>Set to Pending</span>
@@ -997,7 +999,7 @@ export default function Admin() {
                     value={selectedWorker.tier}
                     onChange={(e) => handleChangeTier(selectedWorker.id, e.target.value)}
                     disabled={actionLoading}
-                    className="px-3.5 py-2.5 bg-emerald-50 border-2 border-emerald-300 text-emerald-900 font-bold rounded-xl text-sm focus:outline-none cursor-pointer"
+                    className="px-3.5 py-2.5 bg-gray-800 border-2 border-gray-700 text-white font-bold rounded-xl text-sm focus:border-emerald-500 cursor-pointer"
                   >
                     <option value="silver">Tier: Silver Boy</option>
                     <option value="golden">Tier: Golden Boy</option>
@@ -1009,7 +1011,7 @@ export default function Admin() {
                 <button
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={actionLoading}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-rose-600 hover:bg-rose-50 border border-rose-200 font-semibold rounded-xl text-sm ml-auto transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-rose-400 hover:bg-rose-950/60 border border-rose-800/80 font-semibold rounded-xl text-sm ml-auto transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Reject / Delete</span>
@@ -1018,7 +1020,7 @@ export default function Admin() {
 
               {/* Confirm Delete Prompt */}
               {deleteConfirmOpen && (
-                <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs sm:text-sm mt-3 flex items-center justify-between gap-4">
+                <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-200 text-xs sm:text-sm mt-3 flex items-center justify-between gap-4">
                   <span>
                     Are you sure you want to permanently delete this registration? This action cannot
                     be undone.
@@ -1032,7 +1034,7 @@ export default function Admin() {
                     </button>
                     <button
                       onClick={() => setDeleteConfirmOpen(false)}
-                      className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-50 cursor-pointer"
+                      className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 rounded-lg text-xs hover:bg-gray-700 cursor-pointer"
                     >
                       Cancel
                     </button>

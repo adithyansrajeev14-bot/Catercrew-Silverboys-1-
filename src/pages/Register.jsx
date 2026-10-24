@@ -331,22 +331,6 @@ export default function Register() {
   // REGISTRATION FORM
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
-      {/* Silver Logo Popup - top center */}
-      <div className="flex justify-center mb-6">
-        <div className="relative">
-          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-gray-800 via-gray-900 to-black shadow-2xl ring-4 ring-emerald-500/30 ring-offset-2 overflow-hidden flex items-center justify-center">
-            <img
-              src="/silver-logo.jpg"
-              alt="CaterCrew Silver"
-              className="w-full h-full object-cover scale-90"
-            />
-          </div>
-          <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase font-black bg-emerald-600 text-white px-3 py-0.5 rounded-full shadow-sm whitespace-nowrap">
-            Silver Boys
-          </span>
-        </div>
-      </div>
-
       {/* Page Header */}
       <div className="text-left sm:text-center mb-8">
         <span className="text-xs uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
