@@ -6,11 +6,19 @@ export default function Home() {
     <div className="max-w-3xl mx-auto px-4 py-12 sm:py-20 text-center">
       {/* CaterCrew Official Brand Logo Image */}
       <div className="mb-4 sm:mb-6 flex justify-center">
-        <img
-          src="/logo.png"
-          alt="CaterCrew - Find it. Work it. Earn it."
-          className="w-full max-w-sm sm:max-w-md md:max-w-lg h-auto object-contain mx-auto"
-        />
+        <picture>
+          <source srcSet="/logo.webp" type="image/webp" />
+          <img
+            src="/logo.png"
+            alt="CaterCrew - Find it. Work it. Earn it."
+            width="1024"
+            height="683"
+            fetchPriority="high"
+            loading="eager"
+            decoding="async"
+            className="w-full max-w-sm sm:max-w-md md:max-w-lg h-auto object-contain mx-auto"
+          />
+        </picture>
       </div>
 
       {/* One-line Description */}
