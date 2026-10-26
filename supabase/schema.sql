@@ -189,8 +189,8 @@ begin
     raise exception 'Consent is required to submit registration.';
   end if;
 
-  if p_dob > (current_date - interval '18 years') then
-    raise exception 'Registrant must be at least 18 years of age.';
+  if p_dob > (current_date - interval '16 years') then
+    raise exception 'Registrant must be at least 16 years of age.';
   end if;
 
   insert into public.workers (
