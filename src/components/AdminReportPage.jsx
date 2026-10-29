@@ -22,6 +22,7 @@ import {
   getEventReports,
   createEventReport,
   generateWhatsAppLink,
+  getReportPortalUrl,
   resolveStaffShortage,
   deleteEventReport,
 } from '../lib/reports'
@@ -221,7 +222,7 @@ export default function AdminReportPage({ workers = [] }) {
 
   // Copy link
   const handleCopyLink = (report) => {
-    const portalUrl = `${window.location.origin}/event-report/${report.token}`
+    const portalUrl = getReportPortalUrl(report)
     navigator.clipboard.writeText(portalUrl)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
@@ -594,7 +595,7 @@ export default function AdminReportPage({ workers = [] }) {
 
                       {/* Preview Report Page */}
                       <a
-                        href={`/event-report/${report.token}`}
+                        href={getReportPortalUrl(report)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 bg-gray-800 hover:bg-gray-750 text-gray-300 font-medium text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-gray-700 transition-colors"
@@ -1017,7 +1018,7 @@ export default function AdminReportPage({ workers = [] }) {
                 <span>Direct Access URL:</span>
               </div>
               <div className="bg-gray-900 p-2.5 rounded-xl font-mono text-[11px] text-emerald-400 break-all select-all border border-gray-800">
-                {window.location.origin}/event-report/{selectedShareReport.token}
+                {getReportPortalUrl(selectedShareReport)}
               </div>
             </div>
 

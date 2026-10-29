@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 import {
   getEventReportByToken,
+  fetchEventReportAsync,
+  getEventReports,
   markWorkerAttendance,
   reportStaffShortage,
   addWorkerToReport,
@@ -30,6 +32,10 @@ export default function EventReport() {
   const [report, setReport] = useState(() => (reportId ? getEventReportByToken(reportId) : null))
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTab, setFilterTab] = useState('all') // 'all', 'present', 'pending'
+  const [manualToken, setManualToken] = useState('')
+  const [checkingAsync, setCheckingAsync] = useState(
+    () => Boolean(reportId && !getEventReportByToken(reportId) && isSupabaseConfigured)
+  )
 
   // Shortage modal / drawer state
   const [showShortageModal, setShowShortageModal] = useState(false)
@@ -60,21 +66,37 @@ export default function EventReport() {
   const loadReport = useCallback(() => {
     if (!reportId) return
     const found = getEventReportByToken(reportId)
-    setReport(found)
+    if (found) {
+      setReport(found)
+    }
   }, [reportId])
 
   useEffect(() => {
-    // Listen for cross-tab or background updates
+    let active = true
+
+    // If not found locally, try async fetch from remote database
+    if (!report && reportId && isSupabaseConfigured) {
+      fetchEventReportAsync(reportId).then((found) => {
+        if (active) {
+          setCheckingAsync(false)
+          if (found) {
+            setReport(found)
+          }
+        }
+      })
+    }
+
     const handleStorageUpdate = () => {
       loadReport()
     }
     window.addEventListener('catercrew_reports_updated', handleStorageUpdate)
     window.addEventListener('storage', handleStorageUpdate)
     return () => {
+      active = false
       window.removeEventListener('catercrew_reports_updated', handleStorageUpdate)
       window.removeEventListener('storage', handleStorageUpdate)
     }
-  }, [loadReport])
+  }, [loadReport, report, reportId])
 
   // Mark attendance
   const handleToggleAttendance = (workerCode, currentlyPresent) => {
@@ -221,27 +243,120 @@ export default function EventReport() {
     })
   }, [report, filterTab, searchQuery])
 
-  // Not found / Invalid Token state
-  if (!report) {
+  // Loading / searching state
+  if (checkingAsync) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white border border-gray-200 rounded-3xl p-8 max-w-md w-full text-center shadow-lg">
-          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertOctagon className="w-8 h-8" />
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm font-semibold text-gray-700">Connecting to CaterCrew Event Portal...</p>
+          <p className="text-xs text-gray-400 mt-1">Retrieving live attendance roster</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Not found / Invalid Token state
+  if (!report) {
+    const allAvailableReports = getEventReports()
+
+    const handleLoadManualToken = (e) => {
+      e.preventDefault()
+      const clean = manualToken.trim()
+      if (!clean) return
+      const found = getEventReportByToken(clean)
+      if (found) {
+        setReport(found)
+      } else {
+        showToast('Token not found. Please verify with CaterCrew Operations.')
+      }
+    }
+
+    const whatsappHelpUrl = `https://wa.me/919400088221?text=${encodeURIComponent(
+      `Hello CaterCrew Operations, I am trying to open our event attendance portal (Token: ${
+        reportId || 'unknown'
+      }), but it shows report not found. Please send us our direct access link.`
+    )}`
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center shadow-xl">
+          <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-rose-100">
+            <AlertOctagon className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Event Report Not Found</h1>
-          <p className="text-gray-600 text-sm mt-2">
-            The link you accessed may have expired or is incorrect. This is a private portal for event companies.
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Event Report Not Found</h1>
+          <p className="text-gray-600 text-xs sm:text-sm mt-1.5">
+            The link you accessed ({reportId ? <code className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-800">{reportId}</code> : 'empty link'}) might have been truncated by WhatsApp or expired.
           </p>
-          <div className="mt-6 p-4 bg-gray-50 rounded-2xl text-xs text-gray-500 text-left">
-            <p className="font-semibold text-gray-700 mb-1">Need assistance?</p>
-            <p>Please contact CaterCrew Central Operations immediately to receive a valid event link.</p>
+
+          {/* Quick Active Events Switcher */}
+          {allAvailableReports.length > 0 && (
+            <div className="mt-5 p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-left">
+              <p className="text-xs font-bold text-emerald-950 uppercase tracking-wider mb-2">
+                Available Active CaterCrew Events ({allAvailableReports.length}):
+              </p>
+              <div className="space-y-2">
+                {allAvailableReports.slice(0, 3).map((r) => (
+                  <button
+                    key={r.id || r.token}
+                    type="button"
+                    onClick={() => setReport(r)}
+                    className="w-full text-left p-2.5 rounded-xl bg-white border border-emerald-200 hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer flex items-center justify-between text-xs"
+                  >
+                    <div className="truncate pr-2">
+                      <p className="font-bold text-gray-900 truncate">{r.eventName}</p>
+                      <p className="text-[11px] text-gray-500 truncate">
+                        {r.eventCompany} • {r.venue}
+                      </p>
+                    </div>
+                    <span className="text-emerald-700 font-bold shrink-0 bg-emerald-100 px-2 py-0.5 rounded">
+                      Open →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Manual Token Lookup Box */}
+          <form onSubmit={handleLoadManualToken} className="mt-4 text-left">
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+              Or Enter Event Token / Code:
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="e.g. cc-evt-7821-kochi"
+                className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 text-gray-900 font-mono"
+              />
+              <button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl cursor-pointer"
+              >
+                Load
+              </button>
+            </div>
+          </form>
+
+          {/* Direct Help Desk */}
+          <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
+            <a
+              href={whatsappHelpUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>WhatsApp Operations</span>
+            </a>
             <a
               href="tel:+919400088221"
-              className="mt-3 inline-flex items-center gap-2 font-bold text-emerald-600 hover:text-emerald-700"
+              className="w-full sm:w-auto flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2.5 px-3 rounded-xl transition-colors flex items-center justify-center gap-1.5"
             >
-              <Phone className="w-4 h-4" />
-              <span>+91 94000 88221 (24/7 Operations)</span>
+              <Phone className="w-4 h-4 text-emerald-600" />
+              <span>+91 94000 88221</span>
             </a>
           </div>
         </div>

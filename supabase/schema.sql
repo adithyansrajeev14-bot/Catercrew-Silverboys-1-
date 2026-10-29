@@ -298,3 +298,51 @@ to authenticated
 using (
   (bucket_id in ('photos', 'id-proofs')) and public.is_admin()
 );
+
+-- 9. EVENT REPORTS & ATTENDANCE TABLE
+create table if not exists public.event_reports (
+  id text primary key,
+  token text unique not null,
+  event_name text not null,
+  event_company text not null,
+  contact_person text,
+  whatsapp_number text not null,
+  event_date date not null default current_date,
+  shift_time text not null default 'General Shift',
+  venue text not null,
+  district text not null default 'Ernakulam',
+  required_count int not null default 5,
+  supervisor_phone text not null default '+919400088221',
+  status text not null default 'active',
+  shortage_reported boolean not null default false,
+  shortage_count int not null default 0,
+  shortage_reason text,
+  shortage_resolved boolean not null default false,
+  company_notes text,
+  assigned_workers jsonb not null default '[]'::jsonb,
+  attendance jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Indexes for fast querying by token
+create index if not exists idx_event_reports_token on public.event_reports(token);
+
+-- RLS: allow public access by token and admins full access
+alter table public.event_reports enable row level security;
+
+drop policy if exists "Allow public read event_reports" on public.event_reports;
+create policy "Allow public read event_reports"
+on public.event_reports
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "Allow public insert update event_reports" on public.event_reports;
+create policy "Allow public insert update event_reports"
+on public.event_reports
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
