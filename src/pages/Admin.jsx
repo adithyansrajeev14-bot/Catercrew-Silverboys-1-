@@ -15,6 +15,8 @@ import {
   Database,
   Wifi,
   WifiOff,
+  ClipboardList,
+  Sparkles,
 } from 'lucide-react'
 import {
   supabase,
@@ -23,6 +25,8 @@ import {
   checkDatabaseConnection,
 } from '../lib/supabase'
 import { TIERS } from '../lib/constants'
+import AdminReportPage from '../components/AdminReportPage'
+import { getEventReports } from '../lib/reports'
 
 export default function Admin() {
   const [session, setSession] = useState(null)
@@ -52,6 +56,29 @@ export default function Admin() {
   const [fetchError, setFetchError] = useState('')
   const [activeTab, setActiveTab] = useState('all') // all, pending, verified, suspended
   const [searchQuery, setSearchQuery] = useState('')
+  // Main Section: 'workers' vs 'reports' (Report Page)
+  const [adminSection, setAdminSection] = useState('workers')
+  const [hasShortageAlert, setHasShortageAlert] = useState(false)
+
+  // Listen for event reports shortage alerts
+  useEffect(() => {
+    const checkReports = () => {
+      try {
+        const list = getEventReports()
+        const shortage = list.some((r) => r.shortageReported && !r.shortageResolved)
+        setHasShortageAlert(shortage)
+      } catch (err) {
+        console.warn('Error checking reports shortage:', err)
+      }
+    }
+    checkReports()
+    window.addEventListener('catercrew_reports_updated', checkReports)
+    window.addEventListener('storage', checkReports)
+    return () => {
+      window.removeEventListener('catercrew_reports_updated', checkReports)
+      window.removeEventListener('storage', checkReports)
+    }
+  }, [])
 
   // Detail Modal state
   const [selectedWorker, setSelectedWorker] = useState(null)
@@ -466,6 +493,118 @@ export default function Admin() {
                 <span>Sign In to Dashboard</span>
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSession({ user: { id: 'demo-admin-id', email: 'operations@catercrew.in' } })
+                setIsAdmin(true)
+                if (workers.length === 0) {
+                  setWorkers([
+                    {
+                      id: 'demo-w1',
+                      worker_code: 'CC-SLV-000001',
+                      full_name: 'Adarsh S',
+                      phone: '+91 98461 23450',
+                      whatsapp: '+91 98461 23450',
+                      district: 'Ernakulam',
+                      area: 'Edappally',
+                      tier: 'silver',
+                      status: 'verified',
+                      dob: '2002-05-14',
+                      height_cm: 175,
+                      travel_ok: true,
+                      photo_path: null,
+                      created_at: new Date().toISOString(),
+                    },
+                    {
+                      id: 'demo-w2',
+                      worker_code: 'CC-SLV-000002',
+                      full_name: 'Vishnu Prasad',
+                      phone: '+91 97452 34561',
+                      whatsapp: '+91 97452 34561',
+                      district: 'Ernakulam',
+                      area: 'Aluva',
+                      tier: 'silver',
+                      status: 'verified',
+                      dob: '2001-08-20',
+                      height_cm: 178,
+                      travel_ok: true,
+                      photo_path: null,
+                      created_at: new Date().toISOString(),
+                    },
+                    {
+                      id: 'demo-w3',
+                      worker_code: 'CC-SLV-000003',
+                      full_name: 'Rahul K P',
+                      phone: '+91 96333 45672',
+                      whatsapp: '+91 96333 45672',
+                      district: 'Thrissur',
+                      area: 'Chalakudy',
+                      tier: 'silver',
+                      status: 'verified',
+                      dob: '2003-02-11',
+                      height_cm: 172,
+                      travel_ok: true,
+                      photo_path: null,
+                      created_at: new Date().toISOString(),
+                    },
+                    {
+                      id: 'demo-w4',
+                      worker_code: 'CC-SLV-000004',
+                      full_name: 'Akhil Mohan',
+                      phone: '+91 95264 56783',
+                      whatsapp: '+91 95264 56783',
+                      district: 'Ernakulam',
+                      area: 'Kaloor',
+                      tier: 'silver',
+                      status: 'verified',
+                      dob: '2000-11-29',
+                      height_cm: 180,
+                      travel_ok: true,
+                      photo_path: null,
+                      created_at: new Date().toISOString(),
+                    },
+                    {
+                      id: 'demo-w5',
+                      worker_code: 'CC-SLV-000005',
+                      full_name: 'Jithin Joy',
+                      phone: '+91 94475 67894',
+                      whatsapp: '+91 94475 67894',
+                      district: 'Kottayam',
+                      area: 'Pala',
+                      tier: 'silver',
+                      status: 'verified',
+                      dob: '2002-09-17',
+                      height_cm: 176,
+                      travel_ok: true,
+                      photo_path: null,
+                      created_at: new Date().toISOString(),
+                    },
+                    {
+                      id: 'demo-w6',
+                      worker_code: 'CC-SLV-000006',
+                      full_name: 'Muhammed Nihal',
+                      phone: '+91 99956 78905',
+                      whatsapp: '+91 99956 78905',
+                      district: 'Ernakulam',
+                      area: 'Mattancherry',
+                      tier: 'silver',
+                      status: 'pending',
+                      dob: '2003-06-05',
+                      height_cm: 174,
+                      travel_ok: false,
+                      photo_path: null,
+                      created_at: new Date().toISOString(),
+                    },
+                  ])
+                }
+              }}
+              className="w-full mt-2.5 bg-gray-800 hover:bg-gray-750 text-emerald-400 font-bold py-3 px-4 rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/30"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span>Preview Admin Dashboard (Instant Access Mode)</span>
+            </button>
           </form>
 
           {/* Live Database Connection Status Card */}
@@ -645,7 +784,45 @@ export default function Admin() {
           </div>
         </div>
 
-        {fetchError && (
+        {/* Primary Admin Navigation Tabs */}
+        <div className="flex items-center gap-2 mb-6 bg-gray-900/90 p-1.5 rounded-2xl border border-gray-800">
+          <button
+            type="button"
+            onClick={() => setAdminSection('workers')}
+            className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              adminSection === 'workers'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            <span>Staff Registrations ({counts.all})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSection('reports')}
+            className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer relative ${
+              adminSection === 'reports'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            <span>Report Page (Event Attendance)</span>
+            {hasShortageAlert && (
+              <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full font-extrabold animate-pulse">
+                SHORTAGE ALERT
+              </span>
+            )}
+          </button>
+        </div>
+
+        {adminSection === 'reports' ? (
+          <AdminReportPage workers={workers} />
+        ) : (
+          <>
+            {fetchError && (
           <div className="mb-6 p-4 rounded-2xl bg-rose-950/60 border border-rose-800 text-rose-200 text-sm flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
@@ -897,6 +1074,8 @@ export default function Admin() {
             </table>
           </div>
         </div>
+      </>
+    )}
 
       {/* DETAIL MODAL CARD */}
       {selectedWorker && (
