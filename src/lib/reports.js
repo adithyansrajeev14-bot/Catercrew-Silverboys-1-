@@ -1,10 +1,10 @@
 /**
  * Event Reports & Attendance Management Service
- * Provides tokenized event reports for event management companies to mark attendance.
  * Features:
- * 1. Self-contained URL payload encoding/decoding (guarantees the link works on any device)
- * 2. Supabase remote database synchronization with graceful fallback
- * 3. Local persistent storage with cross-tab and cross-device recovery
+ * 1. Clean, short links (/r/:token) with cross-device cloud persistence
+ * 2. Real-time Supabase cloud synchronization (Storage + Database)
+ * 3. Event Access Password / PIN protection configured in Admin panel
+ * 4. Offline & local storage fallback
  */
 import { supabase, isSupabaseConfigured } from './supabase'
 
@@ -14,11 +14,12 @@ const STORAGE_KEY = 'catercrew_event_reports_v1'
 export const DEFAULT_REPORTS = [
   {
     id: 'rep_kch_101',
-    token: 'cc-evt-7821-kochi',
+    token: 'cs782',
     eventName: 'Royal Heritage Wedding Reception',
     eventCompany: 'Grandeur Event Planners, Kochi',
     contactPerson: 'Rahul Menon',
     whatsappNumber: '+919847123456',
+    accessPassword: '4821',
     eventDate: new Date().toISOString().slice(0, 10),
     shiftTime: '5:00 PM - 11:30 PM (Evening Reception)',
     venue: 'Adlux International Convention Centre, Angamaly',
@@ -128,11 +129,12 @@ export const DEFAULT_REPORTS = [
   },
   {
     id: 'rep_clt_102',
-    token: 'cc-evt-9914-calicut',
+    token: 'ml991',
     eventName: 'Malabar Culinary Expo & Banquet',
     eventCompany: 'Eminence Events & Catering',
     contactPerson: 'Sajid K M',
     whatsappNumber: '+919744112233',
+    accessPassword: '5520',
     eventDate: new Date(Date.now() + 86400 * 1000).toISOString().slice(0, 10),
     shiftTime: '10:00 AM - 4:00 PM (Lunch Banquet)',
     venue: 'Calicut Trade Centre, Kozhikode',
@@ -201,103 +203,22 @@ export const DEFAULT_REPORTS = [
 ]
 
 /**
- * Compactly encode an event report into a safe URL query string.
- * This guarantees that when a link is opened on any device (phone, WhatsApp browser),
- * the event details load immediately with 0% risk of "Not Found".
+ * Generate a random 4-digit PIN
  */
-export function encodeReportPayload(report) {
-  try {
-    if (!report) return ''
-    const compact = {
-      id: report.id,
-      t: report.token,
-      n: report.eventName,
-      c: report.eventCompany,
-      p: report.contactPerson || '',
-      w: report.whatsappNumber,
-      d: report.eventDate,
-      s: report.shiftTime,
-      v: report.venue,
-      dt: report.district,
-      rc: report.requiredCount,
-      sp: report.supervisorPhone || '',
-      cn: report.companyNotes || '',
-      wk: (report.assignedWorkers || []).map((w) => [
-        w.worker_code,
-        w.full_name,
-        w.phone || '',
-        w.district || '',
-        w.tier || 'silver',
-      ]),
-    }
-
-    const jsonStr = JSON.stringify(compact)
-    // UTF-8 safe base64
-    const utf8Bytes = encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) =>
-      String.fromCharCode(parseInt(p1, 16))
-    )
-    return btoa(utf8Bytes)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '')
-  } catch (err) {
-    console.error('Error encoding report payload:', err)
-    return ''
-  }
+export function generateRandomPin() {
+  return String(Math.floor(1000 + Math.random() * 9000))
 }
 
 /**
- * Decode URL payload back into a report object
+ * Generate a super short, clean slug token (e.g. 'c7x9p')
  */
-export function decodeReportPayload(encoded) {
-  try {
-    if (!encoded) return null
-    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
-    while (base64.length % 4) {
-      base64 += '='
-    }
-    const raw = atob(base64)
-    const jsonStr = decodeURIComponent(
-      Array.prototype.map
-        .call(raw, (c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    )
-    const compact = JSON.parse(jsonStr)
-
-    return {
-      id: compact.id || `rep_${Date.now()}`,
-      token: compact.t || '',
-      eventName: compact.n || 'Event',
-      eventCompany: compact.c || 'Event Company',
-      contactPerson: compact.p || '',
-      whatsappNumber: compact.w || '',
-      eventDate: compact.d || new Date().toISOString().slice(0, 10),
-      shiftTime: compact.s || 'General Shift',
-      venue: compact.v || 'Venue',
-      district: compact.dt || 'Ernakulam',
-      requiredCount: parseInt(compact.rc, 10) || 5,
-      supervisorPhone: compact.sp || '+919400088221',
-      companyNotes: compact.cn || '',
-      status: 'active',
-      shortageReported: false,
-      shortageCount: 0,
-      shortageReason: '',
-      shortageResolved: false,
-      assignedWorkers: (compact.wk || []).map((w) => ({
-        worker_code: w[0],
-        full_name: w[1],
-        phone: w[2],
-        district: w[3],
-        tier: w[4] || 'silver',
-        photo_path: null,
-      })),
-      attendance: {},
-      createdAt: new Date().toISOString(),
-    }
-  } catch (err) {
-    console.error('Error decoding report payload:', err)
-    return null
+export function generateShortToken() {
+  const chars = '23456789abcdefghjkmnpqrstuvwxyz'
+  let res = ''
+  for (let i = 0; i < 5; i++) {
+    res += chars.charAt(Math.floor(Math.random() * chars.length))
   }
+  return res
 }
 
 /**
@@ -343,7 +264,6 @@ export function saveSingleReportLocally(report) {
   )
   let updated
   if (idx !== -1) {
-    // Preserve existing attendance if new payload doesn't have it
     updated = [...current]
     updated[idx] = {
       ...report,
@@ -359,74 +279,182 @@ export function saveSingleReportLocally(report) {
 }
 
 /**
- * Synchronously find an event report by token or ID.
- * Automatically checks:
- * 1. window.location.search for ?d= encoded data (recovers from WhatsApp link anywhere)
- * 2. localStorage
- * 3. Default demo events
+ * Synchronize report state to Supabase (Cloud Storage in 'photos' bucket + 'event_reports' table).
+ * This ensures ANY phone or computer across the world can fetch the short link.
+ */
+export async function syncReportToCloud(report) {
+  if (!isSupabaseConfigured || !report) return
+
+  // 1. Upload JSON file to Supabase Storage ('photos' bucket: reports/<token>.json)
+  try {
+    const jsonBlob = new Blob([JSON.stringify(report)], { type: 'application/json' })
+    const storagePath = `reports/${report.token}.json`
+    await supabase.storage.from('photos').upload(storagePath, jsonBlob, {
+      upsert: true,
+      cacheControl: '60',
+      contentType: 'application/json',
+    })
+  } catch (err) {
+    console.warn('Supabase storage upload error:', err)
+  }
+
+  // 2. Also upsert into 'event_reports' SQL table if table exists
+  try {
+    await supabase.from('event_reports').upsert({
+      id: report.id,
+      token: report.token,
+      event_name: report.eventName,
+      event_company: report.eventCompany,
+      contact_person: report.contactPerson,
+      whatsapp_number: report.whatsappNumber,
+      access_password: report.accessPassword || '',
+      event_date: report.eventDate,
+      shift_time: report.shiftTime,
+      venue: report.venue,
+      district: report.district,
+      required_count: report.requiredCount,
+      supervisor_phone: report.supervisorPhone,
+      company_notes: report.companyNotes,
+      assigned_workers: report.assignedWorkers,
+      attendance: report.attendance,
+      status: report.status,
+      shortage_reported: report.shortageReported,
+      shortage_count: report.shortageCount,
+      shortage_reason: report.shortageReason,
+      shortage_resolved: report.shortageResolved,
+      updated_at: new Date().toISOString(),
+    })
+  } catch {
+    // Graceful fallback if table is not migrated yet
+  }
+}
+
+/**
+ * Decode URL payload if present (for backward compatibility with old links)
+ */
+export function decodeReportPayload(encoded) {
+  try {
+    if (!encoded) return null
+    let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+    while (base64.length % 4) {
+      base64 += '='
+    }
+    const raw = atob(base64)
+    const jsonStr = decodeURIComponent(
+      Array.prototype.map
+        .call(raw, (c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    const compact = JSON.parse(jsonStr)
+
+    return {
+      id: compact.id || `rep_${Date.now()}`,
+      token: compact.t || '',
+      eventName: compact.n || 'Event',
+      eventCompany: compact.c || 'Event Company',
+      contactPerson: compact.p || '',
+      whatsappNumber: compact.w || '',
+      accessPassword: compact.pw || '',
+      eventDate: compact.d || new Date().toISOString().slice(0, 10),
+      shiftTime: compact.s || 'General Shift',
+      venue: compact.v || 'Venue',
+      district: compact.dt || 'Ernakulam',
+      requiredCount: parseInt(compact.rc, 10) || 5,
+      supervisorPhone: compact.sp || '+919400088221',
+      companyNotes: compact.cn || '',
+      status: 'active',
+      shortageReported: false,
+      shortageCount: 0,
+      shortageReason: '',
+      shortageResolved: false,
+      assignedWorkers: (compact.wk || []).map((w) => ({
+        worker_code: w[0],
+        full_name: w[1],
+        phone: w[2],
+        district: w[3],
+        tier: w[4] || 'silver',
+        photo_path: null,
+      })),
+      attendance: {},
+      createdAt: new Date().toISOString(),
+    }
+  } catch (err) {
+    console.error('Error decoding report payload:', err)
+    return null
+  }
+}
+
+/**
+ * Synchronously find an event report by token or ID from local device
  */
 export function getEventReportByToken(tokenOrId) {
   if (!tokenOrId) return null
 
-  // 1. Check if the URL currently open in browser contains self-contained payload ?d= or ?data=
+  // 1. Check if the URL currently open in browser contains legacy payload ?d= or ?data=
   if (typeof window !== 'undefined' && window.location) {
     const params = new URLSearchParams(window.location.search)
     const encoded = params.get('d') || params.get('data')
     if (encoded) {
       const decoded = decodeReportPayload(encoded)
       if (decoded) {
-        // Save to local device so future visits work seamlessly
         saveSingleReportLocally(decoded)
-        // If token matches or was provided, return it
-        if (
-          !tokenOrId ||
-          decoded.token?.toLowerCase() === tokenOrId.toLowerCase() ||
-          decoded.id?.toLowerCase() === tokenOrId.toLowerCase() ||
-          tokenOrId.startsWith('cc-evt')
-        ) {
-          return decoded
-        }
+        return decoded
       }
     }
   }
 
   // 2. Check localStorage
   const reports = getEventReports()
+  const clean = tokenOrId.toLowerCase().trim()
   const found = reports.find(
     (r) =>
-      r.token?.toLowerCase() === tokenOrId.toLowerCase() ||
-      r.id?.toLowerCase() === tokenOrId.toLowerCase()
+      r.token?.toLowerCase() === clean ||
+      r.id?.toLowerCase() === clean ||
+      clean.endsWith(r.token?.toLowerCase()) ||
+      r.token?.toLowerCase().endsWith(clean)
   )
   if (found) return found
-
-  // 3. Fallback partial matching (e.g. if slug was truncated or entered without prefix)
-  const cleanSearch = tokenOrId.toLowerCase().trim()
-  const partial = reports.find(
-    (r) =>
-      r.token?.toLowerCase().includes(cleanSearch) ||
-      cleanSearch.includes(r.token?.toLowerCase()) ||
-      r.id?.toLowerCase().includes(cleanSearch)
-  )
-  if (partial) return partial
 
   return null
 }
 
 /**
- * Asynchronously fetch an event report from Supabase (or fallback to local)
+ * Asynchronously fetch an event report across devices via Supabase Storage / Database
  */
 export async function fetchEventReportAsync(tokenOrId) {
-  // Try local first
-  const local = getEventReportByToken(tokenOrId)
+  if (!tokenOrId) return null
+  const clean = tokenOrId.toLowerCase().trim()
+
+  // 1. Check local device first
+  const local = getEventReportByToken(clean)
   if (local) return local
 
-  // If Supabase is available, query remote database
-  if (isSupabaseConfigured && tokenOrId) {
+  // If Supabase is available, query Supabase Storage
+  if (isSupabaseConfigured) {
+    // 2. Fetch from Supabase Storage 'photos' bucket: reports/${clean}.json
+    try {
+      const { data: fileData, error: fileErr } = await supabase.storage
+        .from('photos')
+        .download(`reports/${clean}.json`)
+
+      if (!fileErr && fileData) {
+        const text = await fileData.text()
+        const parsed = JSON.parse(text)
+        if (parsed && (parsed.token || parsed.id)) {
+          saveSingleReportLocally(parsed)
+          return parsed
+        }
+      }
+    } catch (err) {
+      console.warn('Storage fetch error:', err)
+    }
+
+    // 3. Fetch from 'event_reports' table
     try {
       const { data, error } = await supabase
         .from('event_reports')
         .select('*')
-        .or(`token.eq.${tokenOrId},id.eq.${tokenOrId}`)
+        .or(`token.eq.${clean},id.eq.${clean}`)
         .maybeSingle()
 
       if (!error && data) {
@@ -435,7 +463,7 @@ export async function fetchEventReportAsync(tokenOrId) {
         return mapped
       }
     } catch (err) {
-      console.warn('Supabase event_reports query error:', err)
+      console.warn('Table fetch error:', err)
     }
   }
 
@@ -453,6 +481,7 @@ function mapSupabaseToReport(row) {
     eventCompany: row.event_company,
     contactPerson: row.contact_person || '',
     whatsappNumber: row.whatsapp_number,
+    accessPassword: row.access_password || '',
     eventDate: row.event_date,
     shiftTime: row.shift_time,
     venue: row.venue,
@@ -473,14 +502,13 @@ function mapSupabaseToReport(row) {
 }
 
 /**
- * Create a new Event Report.
- * Saves locally AND tries to push to Supabase.
+ * Create a new Event Report with short token & password protection
  */
 export function createEventReport(data) {
   const reports = getEventReports()
-  const randomSlug = Math.random().toString(36).substring(2, 7)
-  const token = `cc-evt-${Date.now().toString().slice(-4)}-${randomSlug}`
-  const id = `rep_${Date.now().toString().slice(-6)}_${randomSlug}`
+  // Clean short token (e.g. csgj3)
+  const token = generateShortToken()
+  const id = `rep_${Date.now().toString().slice(-6)}_${token}`
 
   const newReport = {
     id,
@@ -489,6 +517,7 @@ export function createEventReport(data) {
     eventCompany: data.eventCompany.trim(),
     contactPerson: data.contactPerson?.trim() || '',
     whatsappNumber: data.whatsappNumber.replace(/[\s-]/g, ''),
+    accessPassword: data.accessPassword ? data.accessPassword.trim() : generateRandomPin(),
     eventDate: data.eventDate || new Date().toISOString().slice(0, 10),
     shiftTime: data.shiftTime?.trim() || 'General Shift',
     venue: data.venue.trim(),
@@ -509,33 +538,8 @@ export function createEventReport(data) {
   const updated = [newReport, ...reports]
   saveEventReports(updated)
 
-  // Try to sync to Supabase in the background
-  if (isSupabaseConfigured) {
-    supabase
-      .from('event_reports')
-      .upsert({
-        id: newReport.id,
-        token: newReport.token,
-        event_name: newReport.eventName,
-        event_company: newReport.eventCompany,
-        contact_person: newReport.contactPerson,
-        whatsapp_number: newReport.whatsappNumber,
-        event_date: newReport.eventDate,
-        shift_time: newReport.shiftTime,
-        venue: newReport.venue,
-        district: newReport.district,
-        required_count: newReport.requiredCount,
-        supervisor_phone: newReport.supervisorPhone,
-        company_notes: newReport.companyNotes,
-        assigned_workers: newReport.assignedWorkers,
-        attendance: newReport.attendance,
-        status: newReport.status,
-      })
-      .then(({ error }) => {
-        if (error) console.warn('Supabase event_reports upsert error:', error.message)
-      })
-      .catch((err) => console.warn('Supabase sync catch:', err))
-  }
+  // Sync to Cloud asynchronously so any mobile device can open it immediately
+  syncReportToCloud(newReport)
 
   return newReport
 }
@@ -579,19 +583,7 @@ export function markWorkerAttendance(tokenOrId, workerCode, isPresent, note = ''
 
   reports[index] = updatedReport
   saveEventReports(reports)
-
-  // Sync to Supabase
-  if (isSupabaseConfigured) {
-    supabase
-      .from('event_reports')
-      .update({
-        attendance,
-        status,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', updatedReport.id)
-      .catch(() => {})
-  }
+  syncReportToCloud(updatedReport)
 
   return updatedReport
 }
@@ -634,19 +626,7 @@ export function addWorkerToReport(tokenOrId, worker) {
 
   reports[index] = updatedReport
   saveEventReports(reports)
-
-  if (isSupabaseConfigured) {
-    supabase
-      .from('event_reports')
-      .update({
-        assigned_workers: updatedAssigned,
-        attendance,
-        status: 'in_progress',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', updatedReport.id)
-      .catch(() => {})
-  }
+  syncReportToCloud(updatedReport)
 
   return updatedReport
 }
@@ -677,20 +657,7 @@ export function reportStaffShortage(tokenOrId, shortageCount, reason = '') {
 
   reports[index] = updatedReport
   saveEventReports(reports)
-
-  if (isSupabaseConfigured) {
-    supabase
-      .from('event_reports')
-      .update({
-        shortage_reported: true,
-        shortage_count: updatedReport.shortageCount,
-        shortage_reason: updatedReport.shortageReason,
-        shortage_resolved: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', updatedReport.id)
-      .catch(() => {})
-  }
+  syncReportToCloud(updatedReport)
 
   return updatedReport
 }
@@ -718,17 +685,7 @@ export function resolveStaffShortage(tokenOrId) {
 
   reports[index] = updatedReport
   saveEventReports(reports)
-
-  if (isSupabaseConfigured) {
-    supabase
-      .from('event_reports')
-      .update({
-        shortage_resolved: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', updatedReport.id)
-      .catch(() => {})
-  }
+  syncReportToCloud(updatedReport)
 
   return updatedReport
 }
@@ -738,10 +695,12 @@ export function resolveStaffShortage(tokenOrId) {
  */
 export function deleteEventReport(id) {
   const reports = getEventReports()
+  const target = reports.find((r) => r.id === id || r.token === id)
   const updated = reports.filter((r) => r.id !== id && r.token !== id)
   saveEventReports(updated)
 
-  if (isSupabaseConfigured) {
+  if (isSupabaseConfigured && target) {
+    supabase.storage.from('photos').remove([`reports/${target.token}.json`]).catch(() => {})
     supabase.from('event_reports').delete().eq('id', id).catch(() => {})
   }
 
@@ -749,19 +708,17 @@ export function deleteEventReport(id) {
 }
 
 /**
- * Generate full self-contained portal URL with encoded data payload
+ * Super Short Portal URL:
+ * e.g. https://silver.catercrew.online/r/csgj3
  */
 export function getReportPortalUrl(report) {
   if (!report) return ''
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const encoded = encodeReportPayload(report)
-  return encoded
-    ? `${origin}/event-report/${report.token}?d=${encoded}`
-    : `${origin}/event-report/${report.token}`
+  return `${origin}/r/${report.token}`
 }
 
 /**
- * Generate formatted WhatsApp dispatch URL with encoded portal link
+ * Generate formatted WhatsApp dispatch URL with short link & Access PIN
  */
 export function generateWhatsAppLink(report) {
   const portalUrl = getReportPortalUrl(report)
@@ -780,23 +737,27 @@ export function generateWhatsAppLink(report) {
     `Dear *${report.eventCompany || 'Event Management Team'}*,`,
     `Greetings from CaterCrew Kerala.`,
     ``,
-    `Here is your private CaterCrew staff reporting link for:`,
+    `Here is your official staff reporting link for:`,
     `📍 *Event*: ${report.eventName}`,
     `🏢 *Venue*: ${report.venue} (${report.district})`,
     `📅 *Date*: ${report.eventDate}`,
     `⏰ *Shift / Reporting Time*: ${report.shiftTime}`,
     `👥 *Expected Catering Boys*: ${report.requiredCount} Staff`,
     ``,
-    `👉 *Open Live Attendance Portal*:`,
+    `👉 *Open Attendance Portal*:`,
     `${portalUrl}`,
+    report.accessPassword ? `🔒 *Access PIN*: *${report.accessPassword}*` : '',
     ``,
     `📌 *Instructions for Event Coordinator*:`,
-    `1. Please open the link above as catering boys report to the venue.`,
-    `2. Tap *Mark Present* for each boy arriving on site.`,
-    `3. If there is any shortage or delay, tap *Report Shortage* directly on the portal so our supervisor team can dispatch immediate standby backup.`,
+    `1. Click the link above to open the portal.`,
+    report.accessPassword ? `2. Enter Access PIN *${report.accessPassword}* to unlock.` : '2. Open portal.',
+    `3. Tap *Mark Present* as each catering boy reports on site.`,
+    `4. If any boy is late or missing, tap *Report Shortage* so our team can deploy immediate standby staff.`,
     ``,
     `CaterCrew 24/7 Operations Helpline: ${report.supervisorPhone || '+91 94000 88221'}`,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
 }

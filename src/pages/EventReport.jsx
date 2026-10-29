@@ -16,6 +16,8 @@ import {
   Check,
   AlertOctagon,
   Info,
+  Lock,
+  KeyRound,
 } from 'lucide-react'
 import {
   getEventReportByToken,
@@ -36,6 +38,19 @@ export default function EventReport() {
   const [checkingAsync, setCheckingAsync] = useState(
     () => Boolean(reportId && !getEventReportByToken(reportId) && isSupabaseConfigured)
   )
+
+  // Password / PIN Lock state
+  const [enteredPassword, setEnteredPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [manuallyUnlocked, setManuallyUnlocked] = useState(false)
+  const isUnlocked = useMemo(() => {
+    if (!report || !report.accessPassword) return true
+    if (manuallyUnlocked) return true
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return sessionStorage.getItem(`cc_unlocked_${report.token || report.id}`) === 'true'
+    }
+    return false
+  }, [report, manuallyUnlocked])
 
   // Shortage modal / drawer state
   const [showShortageModal, setShowShortageModal] = useState(false)
@@ -97,6 +112,29 @@ export default function EventReport() {
       window.removeEventListener('storage', handleStorageUpdate)
     }
   }, [loadReport, report, reportId])
+
+  // Verify PIN / Password
+  const handleVerifyPassword = (e) => {
+    e.preventDefault()
+    setPasswordError('')
+    const inputClean = enteredPassword.trim()
+    const expected = (report?.accessPassword || '').trim()
+
+    if (!inputClean) {
+      setPasswordError('Please enter the access PIN / password.')
+      return
+    }
+
+    if (inputClean.toLowerCase() === expected.toLowerCase()) {
+      setManuallyUnlocked(true)
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem(`cc_unlocked_${report.token || report.id}`, 'true')
+      }
+      showToast('✓ Portal unlocked successfully')
+    } else {
+      setPasswordError('Incorrect PIN / Password. Please check the WhatsApp dispatch from CaterCrew.')
+    }
+  }
 
   // Mark attendance
   const handleToggleAttendance = (workerCode, currentlyPresent) => {
@@ -358,6 +396,103 @@ export default function EventReport() {
               <Phone className="w-4 h-4 text-emerald-600" />
               <span>+91 94000 88221</span>
             </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Access Password / PIN Gate for private company access
+  if (report && report.accessPassword && !isUnlocked) {
+    const coordinatorHelpDesk = `https://wa.me/919400088221?text=${encodeURIComponent(
+      `Hello CaterCrew, I am opening the attendance report for ${report.eventName} (${report.eventCompany}), please help me with the Access PIN.`
+    )}`
+
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
+        <div className="bg-gray-950 border border-gray-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative overflow-hidden text-center">
+          {/* Ambient Glow */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="w-16 h-16 bg-emerald-950 border border-emerald-800/80 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-400 shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-950/80 border border-emerald-800 text-emerald-400 text-[11px] font-bold rounded-full uppercase tracking-wider mb-2">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Confidential Coordinator Portal</span>
+          </div>
+
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">
+            Enter Access PIN
+          </h1>
+          <p className="text-gray-400 text-xs sm:text-sm mt-1.5">
+            Attendance for <strong className="text-white">{report.eventName}</strong> by{' '}
+            <span className="text-emerald-400">{report.eventCompany}</span>
+          </p>
+
+          <form onSubmit={handleVerifyPassword} className="mt-6 text-left space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Access PIN / Password</span>
+                <span className="text-[11px] text-gray-500 font-normal">Check WhatsApp message</span>
+              </label>
+              <div className="relative">
+                <KeyRound className="w-5 h-5 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  autoFocus
+                  value={enteredPassword}
+                  onChange={(e) => {
+                    setEnteredPassword(e.target.value)
+                    if (passwordError) setPasswordError('')
+                  }}
+                  placeholder="Enter 4-digit PIN"
+                  className="w-full pl-11 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-2xl focus:outline-none focus:border-emerald-500 text-white font-mono text-center text-lg tracking-widest placeholder:text-gray-600 placeholder:text-sm placeholder:tracking-normal"
+                />
+              </div>
+            </div>
+
+            {passwordError && (
+              <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-200 text-xs rounded-xl flex items-start gap-2">
+                <AlertOctagon className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl text-sm transition-all shadow-lg shadow-emerald-950/80 cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>Unlock Attendance Portal</span>
+              <span>→</span>
+            </button>
+          </form>
+
+          {/* Help & Support */}
+          <div className="mt-6 pt-5 border-t border-gray-900 text-xs space-y-2">
+            <p className="text-gray-500">
+              Need assistance or did not receive your PIN?
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+              <a
+                href={coordinatorHelpDesk}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-900 hover:bg-gray-850 text-gray-300 rounded-xl border border-gray-800 transition-colors"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <span>WhatsApp Helpline</span>
+              </a>
+              <a
+                href={`tel:${report.supervisorPhone || '+919400088221'}`}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-900 hover:bg-gray-850 text-gray-300 rounded-xl border border-gray-800 transition-colors"
+              >
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Call Operations Desk</span>
+              </a>
+            </div>
           </div>
         </div>
       </div>

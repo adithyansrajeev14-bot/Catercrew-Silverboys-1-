@@ -17,12 +17,14 @@ import {
   ChevronDown,
   ChevronUp,
   ShieldAlert,
+  Lock,
 } from 'lucide-react'
 import {
   getEventReports,
   createEventReport,
   generateWhatsAppLink,
   getReportPortalUrl,
+  generateRandomPin,
   resolveStaffShortage,
   deleteEventReport,
 } from '../lib/reports'
@@ -39,6 +41,7 @@ export default function AdminReportPage({ workers = [] }) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedShareReport, setSelectedShareReport] = useState(null)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [copiedPin, setCopiedPin] = useState(false)
   const [expandedReportId, setExpandedReportId] = useState(null)
 
   // New Event Form State
@@ -47,6 +50,7 @@ export default function AdminReportPage({ workers = [] }) {
     eventCompany: '',
     contactPerson: '',
     whatsappNumber: '',
+    accessPassword: generateRandomPin(),
     eventDate: getTodayDateString(),
     shiftTime: '5:30 PM - 11:30 PM (Dinner Reception)',
     venue: '',
@@ -477,6 +481,12 @@ export default function AdminReportPage({ workers = [] }) {
                         <span className="text-xs text-gray-500 font-mono">
                           Token: {report.token}
                         </span>
+                        {report.accessPassword && (
+                          <span className="font-mono text-xs font-bold text-amber-300 bg-amber-950/80 border border-amber-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Lock className="w-3 h-3 text-amber-400" />
+                            <span>PIN: {report.accessPassword}</span>
+                          </span>
+                        )}
                         {isShortage && (
                           <span className="bg-rose-950 border border-rose-700 text-rose-300 font-bold text-xs px-2.5 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
@@ -888,6 +898,37 @@ export default function AdminReportPage({ workers = [] }) {
                 />
               </div>
 
+              {/* Event Access Password / PIN */}
+              <div className="bg-gray-950/80 p-4 rounded-2xl border border-gray-800">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-gray-200 text-xs sm:text-sm flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-emerald-400" />
+                    <span>Event Portal Access PIN / Password *</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, accessPassword: generateRandomPin() }))
+                    }
+                    className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer font-bold"
+                  >
+                    <span>🔄 Generate PIN</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  name="accessPassword"
+                  value={formData.accessPassword}
+                  onChange={handleFormChange}
+                  placeholder="e.g. 4821 or secret123"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-800 bg-gray-900 focus:border-emerald-500 focus:outline-none text-white font-mono text-base tracking-wider"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Event coordinator must enter this PIN/password on their phone to unlock and mark attendance.
+                </p>
+              </div>
+
               {/* Staff Assignment Picker */}
               <div className="border border-gray-800 rounded-2xl p-4 bg-gray-950">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
@@ -1005,21 +1046,42 @@ export default function AdminReportPage({ workers = [] }) {
               Send this link to <strong className="text-white">{selectedShareReport.eventCompany}</strong> ({selectedShareReport.whatsappNumber}).
             </p>
 
-            <div className="mt-5 p-4 bg-gray-950 rounded-2xl border border-gray-800 text-xs space-y-2">
+            <div className="mt-5 p-4 bg-gray-950 rounded-2xl border border-gray-800 text-xs space-y-3">
               <div className="flex items-center justify-between text-gray-400">
                 <span>Event:</span>
                 <span className="font-bold text-white">{selectedShareReport.eventName}</span>
               </div>
               <div className="flex items-center justify-between text-gray-400">
-                <span>Venue:</span>
-                <span className="text-gray-300">{selectedShareReport.venue}</span>
+                <span>Short Portal Link:</span>
               </div>
-              <div className="flex items-center justify-between text-gray-400">
-                <span>Direct Access URL:</span>
-              </div>
-              <div className="bg-gray-900 p-2.5 rounded-xl font-mono text-[11px] text-emerald-400 break-all select-all border border-gray-800">
+              <div className="bg-gray-900 p-2.5 rounded-xl font-mono text-xs text-emerald-400 break-all select-all border border-gray-800">
                 {getReportPortalUrl(selectedShareReport)}
               </div>
+
+              {selectedShareReport.accessPassword && (
+                <div className="bg-amber-950/40 border border-amber-800/80 p-3 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] uppercase font-bold text-amber-400 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Access PIN / Password</span>
+                    </span>
+                    <p className="font-mono text-lg font-black text-white tracking-widest mt-0.5">
+                      {selectedShareReport.accessPassword}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedShareReport.accessPassword)
+                      setCopiedPin(true)
+                      setTimeout(() => setCopiedPin(false), 2000)
+                    }}
+                    className="px-3 py-1.5 bg-amber-900/60 hover:bg-amber-900 text-amber-200 text-xs rounded-lg font-bold border border-amber-700/60 transition-colors cursor-pointer"
+                  >
+                    {copiedPin ? 'Copied!' : 'Copy PIN'}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex flex-col gap-2.5">

@@ -11,7 +11,9 @@ function AppContent() {
   const location = useLocation()
   // Keep event report page confidential to event companies and CaterCrew — no public navbar
   const isEventReportPage =
-    location.pathname.startsWith('/event-report') || location.pathname.startsWith('/report')
+    location.pathname.startsWith('/event-report') ||
+    location.pathname.startsWith('/report') ||
+    location.pathname.startsWith('/r/')
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900 selection:bg-emerald-100 selection:text-emerald-900">
@@ -24,8 +26,9 @@ function AppContent() {
           <Route path="/status/:id" element={<Status />} />
           <Route path="/verify/:id" element={<Verify />} />
           <Route path="/adminaccess" element={<Admin />} />
-          <Route path="/event-report/:reportId" element={<EventReport />} />
+          <Route path="/r/:reportId" element={<EventReport />} />
           <Route path="/report/:reportId" element={<EventReport />} />
+          <Route path="/event-report/:reportId" element={<EventReport />} />
           <Route path="/admin" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
