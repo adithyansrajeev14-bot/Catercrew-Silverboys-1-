@@ -56,3 +56,6 @@ export function BrandWithChefHat({
     </div>
   )
 }
+
+export default ChefHatIcon
+

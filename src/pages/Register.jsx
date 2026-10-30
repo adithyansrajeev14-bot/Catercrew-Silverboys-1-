@@ -15,14 +15,14 @@ import {
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB } from '../lib/constants'
 
-// Calculate 16 years ago limit for DOB picker
-const getSixteenYearsAgo = () => {
+// Calculate 18 years ago limit for DOB picker
+const getEighteenYearsAgo = () => {
   const d = new Date()
-  return new Date(d.getFullYear() - 16, d.getMonth(), d.getDate())
+  return new Date(d.getFullYear() - 18, d.getMonth(), d.getDate())
     .toISOString()
     .split('T')[0]
 }
-const SIXTEEN_YEARS_AGO = getSixteenYearsAgo()
+const EIGHTEEN_YEARS_AGO = getEighteenYearsAgo()
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -108,8 +108,8 @@ export default function Register() {
       const birthDate = new Date(formData.dob)
       const now = new Date()
       const diffYears = (now - birthDate) / (1000 * 60 * 60 * 24 * 365.25)
-      if (diffYears < 16) {
-        errs.dob = 'You must be at least 16 years old to register.'
+      if (diffYears < 18) {
+        errs.dob = 'You must be at least 18 years old to register.'
       }
     }
 
@@ -374,12 +374,12 @@ export default function Register() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-                Date of Birth (16+) <span className="text-emerald-600">*</span>
+                Date of Birth (18+) <span className="text-emerald-600">*</span>
               </label>
               <input
                 type="date"
                 name="dob"
-                max={SIXTEEN_YEARS_AGO}
+                max={EIGHTEEN_YEARS_AGO}
                 value={formData.dob}
                 onChange={handleChange}
                 className={`w-full px-4 py-3.5 rounded-xl border-2 text-base ${

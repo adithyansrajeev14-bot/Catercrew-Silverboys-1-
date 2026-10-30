@@ -58,3 +58,17 @@ export const STATUS_CONFIG = {
 }
 
 export const MAX_PHOTO_SIZE_MB = 3
+
+export const DISTRICTS = KERALA_DISTRICTS
+
+export const UNIFORM_OPTIONS = [
+  'Black formal shirt',
+  'White formal shirt',
+  'Black formal pant',
+  'Black shoes',
+  'Clean shave',
+  'Waistcoat',
+  'White dhoti / mundu with velcro',
+  'Apron',
+]
+

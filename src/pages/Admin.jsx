@@ -17,6 +17,8 @@ import {
   WifiOff,
   ClipboardList,
   Sparkles,
+  Building2,
+  Calendar,
 } from 'lucide-react'
 import {
   supabase,
@@ -26,6 +28,8 @@ import {
 } from '../lib/supabase'
 import { TIERS } from '../lib/constants'
 import AdminReportPage from '../components/AdminReportPage'
+import AdminCompaniesTab from '../components/AdminCompaniesTab'
+import AdminEventsTab from '../components/AdminEventsTab'
 import { getEventReports } from '../lib/reports'
 
 export default function Admin() {
@@ -785,11 +789,11 @@ export default function Admin() {
         </div>
 
         {/* Primary Admin Navigation Tabs */}
-        <div className="flex items-center gap-2 mb-6 bg-gray-900/90 p-1.5 rounded-2xl border border-gray-800">
+        <div className="flex flex-wrap items-center gap-2 mb-6 bg-gray-900/90 p-1.5 rounded-2xl border border-gray-800">
           <button
             type="button"
             onClick={() => setAdminSection('workers')}
-            className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
               adminSection === 'workers'
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -801,8 +805,34 @@ export default function Admin() {
 
           <button
             type="button"
+            onClick={() => setAdminSection('companies')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              adminSection === 'companies'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Companies</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSection('events')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              adminSection === 'events'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Events</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setAdminSection('reports')}
-            className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer relative ${
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer relative ${
               adminSection === 'reports'
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -820,6 +850,10 @@ export default function Admin() {
 
         {adminSection === 'reports' ? (
           <AdminReportPage workers={workers} />
+        ) : adminSection === 'companies' ? (
+          <AdminCompaniesTab />
+        ) : adminSection === 'events' ? (
+          <AdminEventsTab />
         ) : (
           <>
             {fetchError && (
