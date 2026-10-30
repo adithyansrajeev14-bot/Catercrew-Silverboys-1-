@@ -180,11 +180,38 @@ export function AuthProvider({ children }) {
     setProfile(null)
   }, [])
 
+  const isCompany = role === 'company'
+  const isWorker = role === 'worker'
+  const isAdmin = role === 'admin'
+
+  const companyProfile =
+    role === 'company' && profile
+      ? {
+          ...profile,
+          id: profile.id || profile.company_id,
+          company_id: profile.company_id || profile.id,
+        }
+      : null
+
+  const workerProfile =
+    role === 'worker' && profile
+      ? {
+          ...profile,
+          id: profile.id || profile.worker_id,
+          worker_id: profile.worker_id || profile.id,
+        }
+      : null
+
   const value = {
     session,
     user,
     role,
     profile,
+    isCompany,
+    isWorker,
+    isAdmin,
+    companyProfile,
+    workerProfile,
     loading,
     refreshProfile,
     signOut,

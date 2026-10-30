@@ -37,6 +37,10 @@ export default function EventDetails() {
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
 
+  // Urgent Slot & Live Updates
+  const [urgentInfo, setUrgentInfo] = useState(null)
+  const [eventLiveUpdates, setEventLiveUpdates] = useState([])
+
   // Cancellation modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
@@ -88,36 +92,156 @@ export default function EventDetails() {
       // Query event
       let currentEvent = null
 
-      const { data: publicEv, error: pErr } = await supabase
-        .from('events_public')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle()
+      if (isSupabaseConfigured) {
+        try {
+          const { data: publicEv, error: pErr } = await supabase
+            .from('events_public')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle()
 
-      if (!pErr && publicEv) {
-        currentEvent = publicEv
-      } else {
-        const { data: rawEv, error: rErr } = await supabase
-          .from('events')
-          .select('*, companies(company_name, district, contact_name, phone, whatsapp)')
-          .eq('id', id)
-          .maybeSingle()
+          if (!pErr && publicEv) {
+            currentEvent = publicEv
+          } else {
+            const { data: rawEv } = await supabase
+              .from('events')
+              .select('*, companies(company_name, district, contact_name, phone, whatsapp)')
+              .eq('id', id)
+              .maybeSingle()
 
-        if (rErr) throw rErr
-        if (rawEv) {
-          currentEvent = {
-            ...rawEv,
-            company_name: rawEv.companies?.company_name || 'Event Company',
-            company_district: rawEv.companies?.district,
+            if (rawEv) {
+              currentEvent = {
+                ...rawEv,
+                company_name: rawEv.companies?.company_name || 'Event Company',
+                company_district: rawEv.companies?.district,
+              }
+            }
           }
+        } catch (dbErr) {
+          console.warn('Supabase event details fetch notice:', dbErr)
         }
+      }
+
+      // Check localStorage for newly posted custom events
+      if (!currentEvent) {
+        try {
+          const stored = localStorage.getItem('catercrew_custom_events')
+          if (stored) {
+            const list = JSON.parse(stored)
+            if (Array.isArray(list)) {
+              currentEvent = list.find((e) => String(e.id) === String(id))
+            }
+          }
+        } catch (e) {
+          console.warn('Local event lookup notice:', e)
+        }
+      }
+
+      // Check default mock events
+      if (!currentEvent) {
+        const mockMap = {
+          'mock-e1': {
+            id: 'mock-e1',
+            title: 'Grand Royal Wedding Reception',
+            event_type: 'wedding',
+            description: 'High-profile banquet dinner serving 800 guests. Requires neat presentation and courteous service.',
+            company_name: 'Al-Saj Conventions & Catering',
+            company_district: 'Ernakulam',
+            event_date: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+            start_time: '17:00:00',
+            end_time: '23:00:00',
+            report_time: '16:00:00',
+            reporting_time: '16:00:00',
+            duration_hours: 6,
+            venue_name: 'Cochin Palace Auditorium',
+            place_name: 'Cochin Palace Auditorium',
+            district: 'Ernakulam',
+            area: 'Edappally',
+            full_address: 'Toll Junction, NH 66, Edappally, Kochi, Kerala 682024',
+            address: 'Toll Junction, NH 66, Edappally, Kochi, Kerala 682024',
+            landmark: 'Opposite Metro Pillar 384',
+            google_maps_link: 'https://maps.google.com/?q=10.0261,76.3125',
+            map_link: 'https://maps.google.com/?q=10.0261,76.3125',
+            boys_needed: 15,
+            slots_total: 15,
+            boys_booked: 8,
+            slots_filled: 8,
+            wage_per_boy: 1200,
+            payment_mode: 'cash',
+            payment_timing: 'same day',
+            uniform_requirements: ['Black shirt', 'Black formal pant', 'Black formal shoes', 'Neat shave & haircut'],
+            food_provided: true,
+            travel_allowance: false,
+            notes: 'Water and buffet dinner provided for staff. Please arrive strictly at reporting time in clean uniform.',
+            status: 'open',
+          },
+        }
+        if (mockMap[id]) currentEvent = mockMap[id]
       }
 
       if (!currentEvent) {
         throw new Error('Event not found or no longer active.')
       }
 
-      setEventData(currentEvent)
+      // Normalize event data so it displays smoothly across schemas
+      const normalized = {
+        ...currentEvent,
+        venue_name: currentEvent.venue_name || currentEvent.place_name || 'Auditorium',
+        place_name: currentEvent.place_name || currentEvent.venue_name || 'Auditorium',
+        report_time: currentEvent.report_time || currentEvent.reporting_time || '16:00',
+        reporting_time: currentEvent.reporting_time || currentEvent.report_time || '16:00',
+        full_address: currentEvent.full_address || currentEvent.address || '',
+        address: currentEvent.address || currentEvent.full_address || '',
+        google_maps_link: currentEvent.google_maps_link || currentEvent.map_link || '',
+        map_link: currentEvent.map_link || currentEvent.google_maps_link || '',
+        boys_needed: Number(currentEvent.boys_needed ?? currentEvent.slots_total) || 10,
+        slots_total: Number(currentEvent.slots_total ?? currentEvent.boys_needed) || 10,
+        boys_booked: Number(currentEvent.boys_booked ?? currentEvent.slots_filled) || 0,
+        slots_filled: Number(currentEvent.slots_filled ?? currentEvent.boys_booked) || 0,
+        wage_per_boy: Number(currentEvent.wage_per_boy) || 1200,
+        uniform_requirements: Array.isArray(currentEvent.uniform_requirements) && currentEvent.uniform_requirements.length
+          ? currentEvent.uniform_requirements
+          : Array.isArray(currentEvent.uniform)
+          ? currentEvent.uniform
+          : ['Black shirt', 'Black formal pant', 'Black shoes'],
+      }
+
+      setEventData(normalized)
+
+      // Retrieve urgent request info if active
+      try {
+        const storedUrg = localStorage.getItem('catercrew_urgent_requests')
+        if (storedUrg) {
+          const reg = JSON.parse(storedUrg)
+          if (reg && reg[id]) {
+            setUrgentInfo(reg[id])
+          } else if (normalized.is_urgent) {
+            setUrgentInfo({
+              urgentBoysCount: normalized.urgent_boys_needed || 1,
+              urgentBonus: normalized.urgent_bonus || 0,
+              timeframe: 'Immediate',
+              reason: 'Urgent staff requirement',
+            })
+          } else {
+            setUrgentInfo(null)
+          }
+        }
+      } catch (uErr) {
+        console.warn('Error reading urgent requests:', uErr)
+      }
+
+      // Retrieve live updates posted by company
+      try {
+        const key = `catercrew_event_updates_${id}`
+        const storedUpd = localStorage.getItem(key)
+        if (storedUpd) {
+          setEventLiveUpdates(JSON.parse(storedUpd))
+        } else {
+          setEventLiveUpdates([])
+        }
+      } catch (updErr) {
+        console.warn('Error reading event updates:', updErr)
+      }
 
       // If user is logged in, check if booked
       if (user) {
@@ -316,6 +440,36 @@ export default function EventDetails() {
           <ArrowLeft className="w-4 h-4" />
           <span>Back to All Events</span>
         </Link>
+
+        {/* Urgent Slot Alert Banner */}
+        {urgentInfo && (
+          <div className="mb-6 p-5 rounded-3xl bg-amber-500 text-white shadow-lg shadow-amber-500/20 border-2 border-amber-300">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                  <span className="text-xl">⚡</span>
+                </div>
+                <div>
+                  <div className="inline-block bg-white text-amber-900 text-[10px] font-black uppercase px-2 py-0.5 rounded-md mb-1 tracking-wider">
+                    Emergency Staff Needed Immediately
+                  </div>
+                  <h3 className="text-lg font-black tracking-tight">
+                    +{urgentInfo.urgentBoysCount} Urgent Catering Boys Needed!
+                  </h3>
+                  <p className="text-amber-100 text-xs sm:text-sm mt-0.5">
+                    Reporting: <strong>{urgentInfo.timeframe}</strong> • Reason: {urgentInfo.reason}
+                  </p>
+                  {urgentInfo.urgentBonus ? (
+                    <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 bg-black/20 text-white px-3 py-1 rounded-xl text-xs font-black">
+                      <span>Total Payout: {formatCurrency(Number(eventData.wage_per_boy) + Number(urgentInfo.urgentBonus))}</span>
+                      <span className="text-amber-200 font-normal">({formatCurrency(eventData.wage_per_boy)} base + {formatCurrency(urgentInfo.urgentBonus)} emergency bonus)</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action alerts */}
         {actionError && (
@@ -625,11 +779,46 @@ export default function EventDetails() {
           )}
         </div>
 
-        {/* 6. Slots & Booking Section */}
+        {/* 6. Live Updates & Crew Briefing */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
+                6
+              </span>
+              <span>Live Updates & Crew Briefing</span>
+            </h2>
+            {eventLiveUpdates.length > 0 && (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                {eventLiveUpdates.length} Updates
+              </span>
+            )}
+          </div>
+
+          {eventLiveUpdates.length === 0 ? (
+            <div className="p-4 bg-gray-50 rounded-2xl text-xs text-gray-500 italic">
+              No live crew updates posted yet. Standard reporting time is <strong>{formatEventTime(eventData.report_time || eventData.start_time)}</strong>.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {eventLiveUpdates.map((upd) => (
+                <div key={upd.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs text-gray-800">
+                  <p className="font-semibold text-gray-900 leading-relaxed text-sm mb-1">{upd.text}</p>
+                  <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono pt-1">
+                    <span>{upd.author}</span>
+                    <span>{new Date(upd.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 7. Slots & Booking Section */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 mb-12">
           <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4 flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
-              6
+              7
             </span>
             <span>Slots & Confirmation</span>
           </h2>

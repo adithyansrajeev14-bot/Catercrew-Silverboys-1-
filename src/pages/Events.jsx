@@ -4,7 +4,6 @@ import {
   Calendar,
   Clock,
   MapPin,
-  Filter,
   CheckCircle2,
   Users,
   Search,
@@ -23,6 +22,7 @@ export default function Events() {
   const { isWorker, isCompany } = useAuth()
 
   const [events, setEvents] = useState([])
+  const [urgentMap, setUrgentMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -36,97 +36,165 @@ export default function Events() {
     setLoading(true)
     setError('')
     try {
-      if (!isSupabaseConfigured) {
-        // Mock fallback if unconfigured
-        setEvents([
-          {
-            id: 'mock-e1',
-            title: 'Grand Royal Wedding Reception',
-            company_name: 'Al-Saj Conventions & Catering',
-            event_date: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
-            start_time: '17:00:00',
-            end_time: '23:00:00',
-            district: 'Ernakulam',
-            area: 'Edappally',
-            wage_per_boy: 1200,
-            boys_needed: 15,
-            boys_booked: 8,
-            uniform_requirements: ['Black shirt', 'Black formal pant', 'Black shoes'],
-            food_provided: true,
-            travel_allowance: false,
-            status: 'active',
-          },
-          {
-            id: 'mock-e2',
-            title: 'Corporate Annual Gala Dinner',
-            company_name: 'Grand Hyatt Events',
-            event_date: new Date(Date.now() + 86400000 * 4).toISOString().slice(0, 10),
-            start_time: '18:30:00',
-            end_time: '23:30:00',
-            district: 'Ernakulam',
-            area: 'Bolgatty Island',
-            wage_per_boy: 1500,
-            boys_needed: 10,
-            boys_booked: 10,
-            uniform_requirements: ['White formal shirt', 'Black formal pant', 'Black shoes'],
-            food_provided: true,
-            travel_allowance: true,
-            status: 'active',
-          },
-          {
-            id: 'mock-e3',
-            title: 'Traditional Kerala Sadya Feast',
-            company_name: 'Vinayaka Caterers',
-            event_date: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
-            start_time: '09:00:00',
-            end_time: '16:00:00',
-            district: 'Thrissur',
-            area: 'Swaraj Round',
-            wage_per_boy: 1100,
-            boys_needed: 12,
-            boys_booked: 5,
-            uniform_requirements: ['White shirt', 'White dhoti / mundu with velcro', 'Neat hair'],
-            food_provided: true,
-            travel_allowance: false,
-            status: 'active',
-          },
-        ])
-        setLoading(false)
-        return
+      // Read urgent requests
+      try {
+        const storedUrg = localStorage.getItem('catercrew_urgent_requests')
+        if (storedUrg) {
+          setUrgentMap(JSON.parse(storedUrg))
+        }
+      } catch (uErr) {
+        console.warn('Error reading urgent requests:', uErr)
       }
 
-      // First try querying events_public view
-      let data = null
-      let queryErr = null
+      // 1. Read locally posted events
+      let localEvents = []
+      try {
+        const stored = localStorage.getItem('catercrew_custom_events')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            localEvents = parsed
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading local events:', e)
+      }
 
-      const { data: publicData, error: viewError } = await supabase
-        .from('events_public')
-        .select('*')
-        .gte('event_date', new Date().toISOString().slice(0, 10))
-        .order('event_date', { ascending: true })
+      // Default mock fallback
+      const defaultMockEvents = [
+        {
+          id: 'mock-e1',
+          title: 'Grand Royal Wedding Reception',
+          company_name: 'Al-Saj Conventions & Catering',
+          event_date: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+          start_time: '17:00:00',
+          end_time: '23:00:00',
+          reporting_time: '16:00:00',
+          district: 'Ernakulam',
+          area: 'Edappally',
+          place_name: 'Cochin Palace Auditorium',
+          wage_per_boy: 1200,
+          boys_needed: 15,
+          boys_booked: 8,
+          slots_total: 15,
+          slots_filled: 8,
+          uniform_requirements: ['Black shirt', 'Black formal pant', 'Black shoes'],
+          food_provided: true,
+          travel_allowance: false,
+          status: 'open',
+        },
+        {
+          id: 'mock-e2',
+          title: 'Corporate Annual Gala Dinner',
+          company_name: 'Grand Hyatt Events',
+          event_date: new Date(Date.now() + 86400000 * 4).toISOString().slice(0, 10),
+          start_time: '18:30:00',
+          end_time: '23:30:00',
+          reporting_time: '17:30:00',
+          district: 'Ernakulam',
+          area: 'Bolgatty Island',
+          place_name: 'Lulu Bolgatty Grand Hall',
+          wage_per_boy: 1500,
+          boys_needed: 10,
+          boys_booked: 10,
+          slots_total: 10,
+          slots_filled: 10,
+          uniform_requirements: ['White formal shirt', 'Black formal pant', 'Black shoes'],
+          food_provided: true,
+          travel_allowance: true,
+          status: 'full',
+        },
+        {
+          id: 'mock-e3',
+          title: 'Traditional Kerala Sadya Feast',
+          company_name: 'Vinayaka Caterers',
+          event_date: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
+          start_time: '09:00:00',
+          end_time: '16:00:00',
+          reporting_time: '08:00:00',
+          district: 'Thrissur',
+          area: 'Swaraj Round',
+          place_name: 'Thekkinkadu Grounds Auditorium',
+          wage_per_boy: 1100,
+          boys_needed: 12,
+          boys_booked: 5,
+          slots_total: 12,
+          slots_filled: 5,
+          uniform_requirements: ['White shirt', 'White dhoti / mundu with velcro', 'Neat hair'],
+          food_provided: true,
+          travel_allowance: false,
+          status: 'open',
+        },
+      ]
 
-      if (!viewError && publicData) {
-        data = publicData
-      } else {
-        // Fallback directly to events table joined with companies
-        const { data: rawEvents, error: tableError } = await supabase
-          .from('events')
-          .select('*, companies(company_name, district)')
-          .gte('event_date', new Date().toISOString().slice(0, 10))
-          .order('event_date', { ascending: true })
+      let dbEvents = []
 
-        if (tableError) {
-          queryErr = tableError
-        } else {
-          data = (rawEvents || []).map((e) => ({
-            ...e,
-            company_name: e.companies?.company_name || 'Verified Event Company',
-          }))
+      if (isSupabaseConfigured) {
+        try {
+          const { data: publicData, error: viewError } = await supabase
+            .from('events_public')
+            .select('*')
+            .gte('event_date', new Date().toISOString().slice(0, 10))
+            .order('event_date', { ascending: true })
+
+          if (!viewError && publicData && publicData.length > 0) {
+            dbEvents = publicData
+          } else {
+            const { data: rawEvents } = await supabase
+              .from('events')
+              .select('*, companies(company_name, district)')
+              .gte('event_date', new Date().toISOString().slice(0, 10))
+              .order('event_date', { ascending: true })
+
+            if (rawEvents) {
+              dbEvents = rawEvents.map((e) => ({
+                ...e,
+                company_name: e.companies?.company_name || 'Verified Event Company',
+              }))
+            }
+          }
+        } catch (dbErr) {
+          console.warn('Supabase events fetch notice:', dbErr)
         }
       }
 
-      if (queryErr) throw queryErr
-      setEvents(data || [])
+      // Merge and normalize: local events first (newly created), followed by DB events and defaults
+      const rawList = [...localEvents, ...dbEvents]
+      const finalRaw = rawList.length > 0 ? rawList : defaultMockEvents
+
+      const map = new Map()
+      finalRaw.forEach((e) => {
+        if (!e.id) return
+        const normalized = {
+          ...e,
+          id: String(e.id),
+          title: e.title || 'Catering Event',
+          company_name: e.company_name || e.companies?.company_name || 'Verified Event Company',
+          event_type: e.event_type || 'wedding',
+          event_date: e.event_date || new Date().toISOString().slice(0, 10),
+          start_time: e.start_time || '17:00:00',
+          end_time: e.end_time || '23:00:00',
+          reporting_time: e.reporting_time || e.report_time || '16:00:00',
+          district: e.district || 'Ernakulam',
+          area: e.area || e.place_name || e.venue_name || '',
+          place_name: e.place_name || e.venue_name || 'Auditorium',
+          wage_per_boy: Number(e.wage_per_boy) || 1200,
+          boys_needed: Number(e.slots_total ?? e.boys_needed) || 10,
+          boys_booked: Number(e.slots_filled ?? e.boys_booked) || 0,
+          uniform_requirements: Array.isArray(e.uniform) && e.uniform.length ? e.uniform : Array.isArray(e.uniform_requirements) ? e.uniform_requirements : ['Black shirt', 'Black formal pant', 'Black shoes'],
+          food_provided: Boolean(e.food_provided),
+          travel_allowance: Boolean(e.travel_allowance ?? e.transport_provided),
+          status: e.status || 'open',
+          is_urgent: Boolean(e.is_urgent),
+          urgent_boys_needed: e.urgent_boys_needed,
+          urgent_bonus: e.urgent_bonus,
+        }
+        if (!map.has(normalized.id)) {
+          map.set(normalized.id, normalized)
+        }
+      })
+
+      setEvents(Array.from(map.values()))
     } catch (err) {
       console.error('Error fetching events:', err)
       setError('Unable to load upcoming catering events right now.')
@@ -137,6 +205,14 @@ export default function Events() {
 
   useEffect(() => {
     fetchEvents()
+
+    const handleUpdate = () => fetchEvents()
+    window.addEventListener('catercrew_events_updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('catercrew_events_updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
   }, [fetchEvents])
 
   // Filtered & Sorted events
@@ -190,25 +266,28 @@ export default function Events() {
             </p>
           </div>
 
-          {/* Quick Actions for logged in user */}
-          <div className="flex items-center gap-2">
+          {/* Quick Actions (No public Post Event button - only Company Dashboard if logged in as company) */}
+          <div className="flex items-center flex-wrap gap-2.5">
             {isCompany && (
               <Link
-                to="/company/events/new"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-2xl text-sm transition-colors shadow-sm inline-flex items-center gap-2"
+                to="/company/dashboard"
+                className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold px-4 py-2.5 rounded-2xl text-xs sm:text-sm transition-all shadow-md shadow-emerald-700/20 inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>+ Post New Event</span>
+                <Building2 className="w-4 h-4" />
+                <span>Company Dashboard</span>
               </Link>
             )}
+
             {isWorker && (
               <Link
                 to="/my-bookings"
-                className="bg-white border border-gray-200 hover:border-emerald-600 text-gray-800 hover:text-emerald-700 font-bold px-4 py-2.5 rounded-2xl text-sm transition-colors shadow-sm inline-flex items-center gap-2"
+                className="bg-white border border-gray-200 hover:border-emerald-600 text-gray-800 hover:text-emerald-700 font-bold px-4 py-2.5 rounded-2xl text-sm transition-colors shadow-xs inline-flex items-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span>My Bookings</span>
               </Link>
             )}
+
             <button
               onClick={fetchEvents}
               disabled={loading}
@@ -336,6 +415,7 @@ export default function Events() {
               const uniformList = Array.isArray(ev.uniform_requirements)
                 ? ev.uniform_requirements
                 : []
+              const urgentInfo = ev.is_urgent ? ev : urgentMap[ev.id] || null
 
               return (
                 <div
@@ -343,6 +423,21 @@ export default function Events() {
                   className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all flex flex-col justify-between"
                 >
                   <div>
+                    {/* Urgent Slot Alert Banner if active */}
+                    {urgentInfo && (
+                      <div className="mb-3.5 px-3.5 py-1.5 rounded-xl bg-amber-500 text-white font-extrabold text-xs flex items-center justify-between shadow-xs">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                          <span>⚡ URGENT: +{urgentInfo.urgentBoysCount || urgentInfo.urgent_boys_needed || 1} Boys Needed Immediately!</span>
+                        </span>
+                        {urgentInfo.urgentBonus || urgentInfo.urgent_bonus ? (
+                          <span className="bg-white text-amber-900 px-2 py-0.5 rounded-md font-black text-[10px]">
+                            +{formatCurrency(urgentInfo.urgentBonus || urgentInfo.urgent_bonus)} Bonus
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+
                     {/* Top Row: Company & Date */}
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div>

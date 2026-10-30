@@ -831,7 +831,7 @@ with check (
     select 1 from public.companies
     where id = company_id
       and user_id = auth.uid()
-      and status = 'approved'
+      and status in ('approved', 'pending')
   )
 );
 

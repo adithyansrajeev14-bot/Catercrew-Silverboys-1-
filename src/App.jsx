@@ -63,11 +63,16 @@ function AppContent() {
           <Route path="/event" element={<Navigate to="/events" replace />} />
           <Route path="/events/:id" element={<EventDetails />} />
           <Route path="/my-bookings" element={<MyBookings />} />
+          <Route path="/post-event" element={<PostEvent />} />
+          <Route path="/post-events" element={<Navigate to="/post-event" replace />} />
+          <Route path="/create-event" element={<Navigate to="/post-event" replace />} />
+          <Route path="/events/new" element={<Navigate to="/post-event" replace />} />
 
           {/* Company Portal */}
           <Route path="/company/setup" element={<CompanySetup />} />
           <Route path="/company/dashboard" element={<CompanyDashboard />} />
           <Route path="/company/events/new" element={<PostEvent />} />
+          <Route path="/company/post-event" element={<Navigate to="/post-event" replace />} />
           <Route path="/company/events/:id" element={<CompanyManageEvent />} />
           <Route path="/company/events/:id/edit" element={<PostEvent />} />
 
