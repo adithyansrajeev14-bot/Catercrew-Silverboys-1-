@@ -15,6 +15,19 @@ export default function AuthCallback() {
 
     const processAuth = async () => {
       try {
+        // Inspect query and hash params for OAuth provider errors
+        const urlParams = new URLSearchParams(window.location.search)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const errorDesc =
+          urlParams.get('error_description') ||
+          hashParams.get('error_description') ||
+          urlParams.get('error') ||
+          hashParams.get('error')
+
+        if (errorDesc) {
+          throw new Error(decodeURIComponent(errorDesc))
+        }
+
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
 

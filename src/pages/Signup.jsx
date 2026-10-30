@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   User,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import GoogleOAuthErrorNotice from '../components/GoogleOAuthErrorNotice'
 
 export default function Signup() {
   const navigate = useNavigate()
@@ -35,12 +36,16 @@ export default function Signup() {
   const [workerPassword, setWorkerPassword] = useState('')
   const [workerAuthLoading, setWorkerAuthLoading] = useState(false)
   const [workerAuthError, setWorkerAuthError] = useState('')
+  const [workerGoogleOAuthError, setWorkerGoogleOAuthError] = useState(false)
+  const workerEmailInputRef = useRef(null)
 
   // Company Auth Account Creation
   const [companyEmail, setCompanyEmail] = useState('')
   const [companyPassword, setCompanyPassword] = useState('')
   const [companyAuthLoading, setCompanyAuthLoading] = useState(false)
   const [companyAuthError, setCompanyAuthError] = useState('')
+  const [companyGoogleOAuthError, setCompanyGoogleOAuthError] = useState(false)
+  const companyEmailInputRef = useRef(null)
 
   // Google OAuth initiation
   const handleGoogleSignIn = async (flowType) => {
@@ -50,6 +55,8 @@ export default function Signup() {
     }
 
     if (flowType === 'worker') {
+      setWorkerGoogleOAuthError(false)
+      setWorkerAuthError('')
       if (!workerCode || !workerPhone) {
         setWorkerError('Please enter your CaterCrew ID and registered phone first.')
         return
@@ -60,20 +67,39 @@ export default function Signup() {
         JSON.stringify({ code: workerCode.trim().toUpperCase(), phone: workerPhone.trim() })
       )
     } else if (flowType === 'company') {
+      setCompanyGoogleOAuthError(false)
+      setCompanyAuthError('')
+      sessionStorage.setItem('catercrew_signup_role', 'company')
       sessionStorage.setItem('catercrew_intent', 'company')
     }
 
     const redirectOrigin = window.location.origin
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${redirectOrigin}/auth/callback`,
-      },
-    })
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${redirectOrigin}/auth/callback`,
+        },
+      })
 
-    if (error) {
-      if (flowType === 'worker') setWorkerAuthError(error.message)
-      else setCompanyAuthError(error.message)
+      if (error) throw error
+    } catch (err) {
+      console.error('Google sign in error:', err)
+      const rawMessage = err?.message || err?.msg || (typeof err === 'string' ? err : JSON.stringify(err))
+      const isProviderNotEnabled =
+        rawMessage.includes('provider is not enabled') ||
+        rawMessage.includes('Unsupported provider') ||
+        rawMessage.includes('validation_failed') ||
+        err?.error_code === 'validation_failed' ||
+        err?.code === 400
+
+      if (isProviderNotEnabled) {
+        if (flowType === 'worker') setWorkerGoogleOAuthError(true)
+        else setCompanyGoogleOAuthError(true)
+      } else {
+        if (flowType === 'worker') setWorkerAuthError(rawMessage)
+        else setCompanyAuthError(rawMessage)
+      }
     }
   }
 
@@ -524,6 +550,16 @@ export default function Signup() {
                   </div>
                 </div>
 
+                {workerGoogleOAuthError && (
+                  <GoogleOAuthErrorNotice
+                    onDismiss={() => setWorkerGoogleOAuthError(false)}
+                    onUseEmail={() => {
+                      workerEmailInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      workerEmailInputRef.current?.focus()
+                    }}
+                  />
+                )}
+
                 {/* Google Sign In Button */}
                 <button
                   type="button"
@@ -567,6 +603,7 @@ export default function Signup() {
                     <div className="relative">
                       <Mail className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
+                        ref={workerEmailInputRef}
                         type="email"
                         required
                         value={workerEmail}
@@ -646,6 +683,16 @@ export default function Signup() {
               </div>
             </div>
 
+            {companyGoogleOAuthError && (
+              <GoogleOAuthErrorNotice
+                onDismiss={() => setCompanyGoogleOAuthError(false)}
+                onUseEmail={() => {
+                  companyEmailInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  companyEmailInputRef.current?.focus()
+                }}
+              />
+            )}
+
             {/* Google Sign In Button */}
             <button
               type="button"
@@ -689,6 +736,7 @@ export default function Signup() {
                 <div className="relative">
                   <Mail className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
+                    ref={companyEmailInputRef}
                     type="email"
                     required
                     value={companyEmail}

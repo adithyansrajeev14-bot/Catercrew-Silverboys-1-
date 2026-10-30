@@ -72,3 +72,12 @@ export const UNIFORM_OPTIONS = [
   'Apron',
 ]
 
+export const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu.apps.googleusercontent.com'
+
+export const SUPABASE_PROJECT_REF = 'euamrlqdpkzpnrhftjro'
+
+export const SUPABASE_OAUTH_CALLBACK_URL =
+  'https://euamrlqdpkzpnrhftjro.supabase.co/auth/v1/callback'
+

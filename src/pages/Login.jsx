@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { LogIn, Mail, Lock, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import ChefHatLogo from '../components/ChefHatLogo'
+import GoogleOAuthErrorNotice from '../components/GoogleOAuthErrorNotice'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -11,12 +12,14 @@ export default function Login() {
   const nextUrl = searchParams.get('next')
 
   const { refreshProfile } = useAuth()
+  const emailInputRef = useRef(null)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
+  const [googleOAuthError, setGoogleOAuthError] = useState(false)
   const [infoMessage, setInfoMessage] = useState('')
 
   // Forgot password modal
@@ -72,6 +75,7 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setError('')
+    setGoogleOAuthError(false)
     setGoogleLoading(true)
     try {
       if (!isSupabaseConfigured) {
@@ -89,7 +93,19 @@ export default function Login() {
       if (oauthError) throw oauthError
     } catch (err) {
       console.error('Google sign in error:', err)
-      setError(err.message || 'Could not initiate Google login.')
+      const rawMessage = err?.message || err?.msg || (typeof err === 'string' ? err : JSON.stringify(err))
+      const isProviderNotEnabled =
+        rawMessage.includes('provider is not enabled') ||
+        rawMessage.includes('Unsupported provider') ||
+        rawMessage.includes('validation_failed') ||
+        err?.error_code === 'validation_failed' ||
+        err?.code === 400
+
+      if (isProviderNotEnabled) {
+        setGoogleOAuthError(true)
+      } else {
+        setError(rawMessage || 'Could not initiate Google login.')
+      }
       setGoogleLoading(false)
     }
   }
@@ -132,6 +148,16 @@ export default function Login() {
 
         {/* Card */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
+          {googleOAuthError && (
+            <GoogleOAuthErrorNotice
+              onDismiss={() => setGoogleOAuthError(false)}
+              onUseEmail={() => {
+                emailInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                emailInputRef.current?.focus()
+              }}
+            />
+          )}
+
           {error && (
             <div className="mb-5 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-3">
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -190,6 +216,7 @@ export default function Login() {
               <div className="relative">
                 <Mail className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
+                  ref={emailInputRef}
                   type="email"
                   required
                   value={email}

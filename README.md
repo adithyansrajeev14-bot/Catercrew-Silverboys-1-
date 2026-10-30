@@ -101,41 +101,45 @@ The database schema and RPCs are divided into two safe SQL scripts:
 
 To enable "Continue with Google" authentication for both Catering Boys and Event Companies:
 
-### Step 1: Google Cloud Console
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Select your project or create a new one.
-3. In the sidebar, navigate to **APIs & Services** > **OAuth consent screen**:
-   - User Type: **External**
-   - App Name: `CaterCrew`
-   - User Support Email: your email
-   - Developer Contact Email: your email
-   - Save and proceed with standard scopes (`.../auth/userinfo.email`, `.../auth/userinfo.profile`).
-4. In the sidebar, go to **Credentials**:
-   - Click **+ Create Credentials** > **OAuth Client ID**.
-   - Application Type: **Web application**.
-   - Name: `CaterCrew Web Client`.
-   - **Authorized JavaScript origins**:
-     - `http://localhost:5173`
-     - `http://localhost:3000`
-     - `https://silver.catercrew.online`
-   - **Authorized redirect URIs**:
-     - `https://<YOUR-SUPABASE-PROJECT-REF>.supabase.co/auth/v1/callback`
-       *(You will copy this from your Supabase Dashboard in Step 2)*.
-   - Click **Create** and copy your **Client ID** and **Client Secret**.
+### Your Configured Client ID:
+`995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu.apps.googleusercontent.com`
 
-### Step 2: Supabase Authentication Providers
-1. Open your [Supabase Dashboard](https://supabase.com/dashboard) > **Authentication** > **Providers**.
-2. Select **Google**:
-   - Toggle **Enable Sign in with Google** to ON.
-   - Paste the **Client ID** and **Client Secret** obtained from Google Cloud Console.
-   - Copy the **Callback URL (for OAuth)** shown in the modal (e.g. `https://<project-ref>.supabase.co/auth/v1/callback`) and ensure it matches the authorized redirect URI in Google Cloud Console.
+---
+
+### Step 1: In Google Cloud Console
+1. Go to [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
+2. Click your OAuth 2.0 Web Client (`995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu...`).
+3. Under **Authorized JavaScript origins**, make sure you have:
+   - `https://silver.catercrew.online`
+   - `https://ais-dev-ayhp4cpjb5v5646t4tfdg4-987152010618.asia-southeast1.run.app`
+   - `http://localhost:3000`
+4. Under **Authorized redirect URIs**, add your Supabase Auth callback:
+   - `https://euamrlqdpkzpnrhftjro.supabase.co/auth/v1/callback`
+5. Click **Save** and copy your **Client Secret**.
+
+---
+
+### Step 2: In Supabase Authentication Providers
+1. Open your [Supabase Google Provider Dashboard](https://supabase.com/dashboard/project/euamrlqdpkzpnrhftjro/auth/providers).
+2. Click on **Google**:
+   - Toggle **Enable Sign in with Google** to **ON**.
+   - Paste **Client ID**:
+     `995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu.apps.googleusercontent.com`
+   - Paste your **Client Secret** from Google Cloud Console.
+   - Click **Save**.
 3. Under **Authentication** > **URL Configuration**:
-   - Set **Site URL**: `https://silver.catercrew.online`
+   - Ensure **Site URL** is set to `https://silver.catercrew.online`
    - Add **Redirect URLs**:
      - `https://silver.catercrew.online/auth/callback`
-     - `http://localhost:5173/auth/callback`
+     - `https://ais-dev-ayhp4cpjb5v5646t4tfdg4-987152010618.asia-southeast1.run.app/auth/callback`
      - `http://localhost:3000/auth/callback`
 4. Click **Save**.
+
+---
+
+### ⚠️ Instant Alternative While Configuring
+You do not need to wait for Google OAuth setup to test or use CaterCrew:
+- Users and event companies can register and log in right now using **Email & Password**.
 
 ---
 
