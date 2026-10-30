@@ -109,13 +109,25 @@ export default function AdminCompaniesTab() {
     setActionLoading(true)
     try {
       if (isSupabaseConfigured) {
-        const { error: updErr } = await supabase
+        // Update company status safely (companies table uses status and optional updated_at)
+        const updatePayload = {
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        }
+
+        let { error: updErr } = await supabase
           .from('companies')
-          .update({
-            status: newStatus,
-            verified_at: newStatus === 'approved' ? new Date().toISOString() : null,
-          })
+          .update(updatePayload)
           .eq('id', companyId)
+
+        // Fallback if updated_at is missing from schema
+        if (updErr && updErr.message && updErr.message.includes('updated_at')) {
+          const fallback = await supabase
+            .from('companies')
+            .update({ status: newStatus })
+            .eq('id', companyId)
+          updErr = fallback.error
+        }
 
         if (updErr) throw updErr
       }

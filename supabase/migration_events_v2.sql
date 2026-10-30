@@ -31,6 +31,9 @@ create table if not exists public.companies (
   updated_at timestamptz not null default now()
 );
 
+-- Ensure verified_at column exists if needed
+alter table public.companies add column if not exists verified_at timestamptz;
+
 create index if not exists idx_companies_user_id on public.companies(user_id);
 create index if not exists idx_companies_status on public.companies(status);
 create index if not exists idx_companies_district on public.companies(district);

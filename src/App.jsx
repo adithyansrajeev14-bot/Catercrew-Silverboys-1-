@@ -20,8 +20,21 @@ import CompanyDashboard from './pages/CompanyDashboard'
 import PostEvent from './pages/PostEvent'
 import CompanyManageEvent from './pages/CompanyManageEvent'
 
+import { useEffect } from 'react'
+
 function AppContent() {
   const location = useLocation()
+  const navigate = useNavigate()
+
+  // Catch OAuth redirects that landed on the root or other routes with access_token or code
+  useEffect(() => {
+    const hasHashToken = window.location.hash.includes('access_token=')
+    const hasCodeParam = window.location.search.includes('code=')
+    if ((hasHashToken || hasCodeParam) && !location.pathname.startsWith('/auth/callback')) {
+      navigate(`/auth/callback${window.location.search}${window.location.hash}`, { replace: true })
+    }
+  }, [location.pathname, navigate])
+
   // Keep event report page confidential to event companies and CaterCrew — no public navbar
   const isEventReportPage =
     location.pathname.startsWith('/event-report') ||

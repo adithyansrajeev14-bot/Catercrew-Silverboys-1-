@@ -17,7 +17,11 @@ export default function AuthCallback() {
       try {
         // Inspect query and hash params for OAuth provider errors
         const urlParams = new URLSearchParams(window.location.search)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const hashStr = window.location.hash.startsWith('#')
+          ? window.location.hash.substring(1)
+          : window.location.hash
+        const hashParams = new URLSearchParams(hashStr)
+
         const errorDesc =
           urlParams.get('error_description') ||
           hashParams.get('error_description') ||
@@ -28,17 +32,59 @@ export default function AuthCallback() {
           throw new Error(decodeURIComponent(errorDesc))
         }
 
+        // 1. If PKCE code is provided in query params, exchange it
+        const code = urlParams.get('code')
+        if (code) {
+          try {
+            const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+            if (exchangeError) {
+              console.warn('PKCE exchangeCodeForSession warning:', exchangeError)
+            } else if (exchangeData?.user && mounted) {
+              await handleUserSession(exchangeData.user)
+              return
+            }
+          } catch (codeErr) {
+            console.warn('exchangeCodeForSession exception:', codeErr)
+          }
+        }
+
+        // 2. If access_token is in hash, try setting session explicitly if not yet established
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
+        if (accessToken) {
+          try {
+            const { data: setSessionData, error: setSessionErr } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            })
+            if (!setSessionErr && setSessionData?.user && mounted) {
+              await handleUserSession(setSessionData.user)
+              return
+            }
+          } catch (setErr) {
+            console.warn('setSession exception:', setErr)
+          }
+        }
+
+        // 3. Check existing active session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
 
         if (!session?.user) {
-          // If no session immediately, wait briefly or listen to state
-          const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+          // If no session immediately, listen for auth state changes
+          const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
             if (newSession?.user && mounted) {
-              authListener.subscription.unsubscribe()
+              authListener?.subscription?.unsubscribe?.()
               await handleUserSession(newSession.user)
             }
           })
+
+          // Timeout fallback after 6 seconds
+          setTimeout(() => {
+            if (mounted && !session?.user) {
+              setError('Session could not be established. Please try logging in again.')
+            }
+          }, 6000)
           return
         }
 
