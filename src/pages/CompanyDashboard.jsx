@@ -410,15 +410,6 @@ export default function CompanyDashboard() {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
             </button>
 
-            {/* Live Radar Button */}
-            <Link
-              to="/live-radar?pov=company"
-              className="bg-gray-900 hover:bg-gray-800 text-white font-extrabold px-5 py-3.5 rounded-2xl text-sm transition-all flex items-center gap-2 shadow-md cursor-pointer border border-gray-800"
-            >
-              <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span>Live Staff Radar</span>
-            </Link>
-
             {/* Core Feature Button: Post New Event */}
             <Link
               to="/post-event"

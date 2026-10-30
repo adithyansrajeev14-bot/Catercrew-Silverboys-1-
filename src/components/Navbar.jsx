@@ -13,7 +13,6 @@ import {
   ShieldAlert,
   Menu,
   X,
-  Radio,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -98,21 +97,6 @@ export default function Navbar() {
           >
             <Calendar className="w-4 h-4 text-emerald-600" />
             <span>Events</span>
-          </Link>
-
-          <Link
-            to="/live-radar"
-            className={`px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 flex items-center gap-1.5 ${
-              isActive('/live-radar')
-                ? 'bg-emerald-100 text-emerald-900 font-bold'
-                : 'text-gray-700 hover:text-emerald-600 hover:bg-gray-50'
-            }`}
-          >
-            <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
-            <span>Live Radar</span>
-            <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-wider">
-              Uber
-            </span>
           </Link>
 
           <Link
@@ -297,23 +281,6 @@ export default function Navbar() {
           >
             <Calendar className="w-5 h-5 text-emerald-600" />
             <span>Events (Catering Gigs)</span>
-          </Link>
-
-          <Link
-            to="/live-radar"
-            className={`flex items-center justify-between px-4 py-3 rounded-xl font-medium text-base ${
-              isActive('/live-radar')
-                ? 'bg-emerald-100 text-emerald-900 font-bold'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Radio className="w-5 h-5 text-emerald-600 animate-pulse" />
-              <span>Live Radar (Uber Map)</span>
-            </div>
-            <span className="bg-emerald-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase">
-              Live
-            </span>
           </Link>
 
           <Link

@@ -11,16 +11,12 @@ import {
   ArrowRight,
   RefreshCw,
   Building2,
-  SlidersHorizontal,
-  Radio,
-  Layers,
+  SlidersHorizontal
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { DISTRICTS } from '../lib/constants'
 import { formatCurrency, formatEventDate, formatEventTime } from '../lib/formatters'
 import { useAuth } from '../context/AuthContext'
-import { getStoredEvents, SAMPLE_CATERING_BOYS } from '../lib/eventsStorage'
-import UberLiveMap from '../components/UberLiveMap'
 
 export default function Events() {
   const { isWorker, isCompany } = useAuth()
@@ -29,7 +25,6 @@ export default function Events() {
   const [urgentMap, setUrgentMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [viewMode, setViewMode] = useState('grid') // 'grid' or 'map'
 
   // Filters
   const [selectedDistrict, setSelectedDistrict] = useState('all')
@@ -51,12 +46,18 @@ export default function Events() {
         console.warn('Error reading urgent requests:', uErr)
       }
 
-      // 1. Read locally posted & admin-managed events from centralized storage
+      // 1. Read locally posted events
       let localEvents = []
       try {
-        localEvents = getStoredEvents()
+        const stored = localStorage.getItem('catercrew_custom_events')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            localEvents = parsed
+          }
+        }
       } catch (e) {
-        console.warn('Error reading stored events:', e)
+        console.warn('Error reading local events:', e)
       }
 
       // Default mock fallback
@@ -265,35 +266,8 @@ export default function Events() {
             </p>
           </div>
 
-          {/* Quick Actions & View Mode Toggle */}
+          {/* Quick Actions (No public Post Event button - only Company Dashboard if logged in as company) */}
           <div className="flex items-center flex-wrap gap-2.5">
-            {/* View Mode Toggle */}
-            <div className="bg-white border border-gray-200 p-1 rounded-2xl flex items-center shadow-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Grid View
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('map')}
-                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'map'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Radio className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                <span>Uber Radar</span>
-              </button>
-            </div>
-
             {isCompany && (
               <Link
                 to="/company/dashboard"
@@ -393,33 +367,14 @@ export default function Events() {
           </div>
         </div>
 
-        {/* Events List / Uber Radar View */}
+        {/* Events List */}
         {error && (
           <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm mb-6">
             {error}
           </div>
         )}
 
-        {viewMode === 'map' ? (
-          <div className="space-y-4">
-            <div className="bg-emerald-900 text-white rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-emerald-300 animate-pulse shrink-0" />
-                <span>
-                  <strong>Interactive Kerala Radar:</strong> Showing {filteredEvents.length} events
-                  and nearby verified catering staff. Switch between Event Company POV and Catering
-                  Boy POV using the toggle on the map.
-                </span>
-              </div>
-            </div>
-            <UberLiveMap
-              events={filteredEvents}
-              cateringBoys={SAMPLE_CATERING_BOYS}
-              initialPov={isCompany ? 'company' : 'boy'}
-              height="650px"
-            />
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="py-20 text-center">
             <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
             <p className="text-sm text-gray-500 font-medium">Loading upcoming events...</p>

@@ -415,64 +415,6 @@ export function getEventReportByToken(tokenOrId) {
   )
   if (found) return found
 
-  // 3. Check if token matches any event in catercrew_custom_events
-  try {
-    const rawEvents = localStorage.getItem('catercrew_custom_events')
-    if (rawEvents) {
-      const parsedEvents = JSON.parse(rawEvents)
-      if (Array.isArray(parsedEvents)) {
-        const matchedEvent = parsedEvents.find(
-          (e) =>
-            String(e.id).toLowerCase() === clean ||
-            clean.includes(String(e.id).toLowerCase()) ||
-            String(e.id).toLowerCase().includes(clean)
-        )
-        if (matchedEvent) {
-          const autoReport = {
-            id: `rep_${matchedEvent.id}`,
-            token: clean,
-            eventName: matchedEvent.title || 'CaterCrew Event',
-            eventCompany: matchedEvent.company_name || 'Event Management Partner',
-            contactPerson: matchedEvent.company_contact || 'Event Coordinator',
-            whatsappNumber: matchedEvent.company_contact || '+919400088221',
-            accessPassword: matchedEvent.access_password || '1234',
-            eventDate: matchedEvent.event_date || new Date().toISOString().slice(0, 10),
-            shiftTime: `${matchedEvent.reporting_time || '16:00'} - ${matchedEvent.end_time || '23:00'}`,
-            venue:
-              matchedEvent.place_name ||
-              matchedEvent.venue_name ||
-              matchedEvent.area ||
-              'Convention Centre',
-            district: matchedEvent.district || 'Ernakulam',
-            requiredCount: Number(matchedEvent.slots_total || matchedEvent.boys_needed) || 8,
-            supervisorPhone: '+919400088221',
-            status: 'active',
-            shortageReported: false,
-            shortageCount: 0,
-            shortageReason: '',
-            shortageResolved: false,
-            companyNotes: matchedEvent.notes || 'Official event attendance roster.',
-            createdAt: new Date().toISOString(),
-            assignedWorkers: DEFAULT_REPORTS[0].assignedWorkers.slice(
-              0,
-              Number(matchedEvent.slots_total || matchedEvent.boys_needed) || 8
-            ),
-            attendance: {},
-          }
-          saveSingleReportLocally(autoReport)
-          return autoReport
-        }
-      }
-    }
-  } catch (evErr) {
-    console.warn('Error matching event to report:', evErr)
-  }
-
-  // 4. If token is 'demo', 'latest', 'sample', or 'preview'
-  if (clean === 'demo' || clean === 'latest' || clean === 'sample' || clean === 'preview') {
-    return reports[0] || DEFAULT_REPORTS[0]
-  }
-
   return null
 }
 

@@ -19,7 +19,6 @@ import CompanySetup from './pages/CompanySetup'
 import CompanyDashboard from './pages/CompanyDashboard'
 import PostEvent from './pages/PostEvent'
 import CompanyManageEvent from './pages/CompanyManageEvent'
-import LiveRadar from './pages/LiveRadar'
 
 import { useEffect } from 'react'
 
@@ -62,9 +61,6 @@ function AppContent() {
           {/* Events Subsystem */}
           <Route path="/events" element={<Events />} />
           <Route path="/event" element={<Navigate to="/events" replace />} />
-          <Route path="/live-radar" element={<LiveRadar />} />
-          <Route path="/radar" element={<Navigate to="/live-radar" replace />} />
-          <Route path="/map" element={<Navigate to="/live-radar" replace />} />
           <Route path="/events/:id" element={<EventDetails />} />
           <Route path="/my-bookings" element={<MyBookings />} />
           <Route path="/post-event" element={<PostEvent />} />
