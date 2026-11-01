@@ -88,18 +88,6 @@ export default function Navbar() {
           </Link>
 
           <Link
-            to="/events"
-            className={`px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 flex items-center gap-1.5 ${
-              isActive('/events')
-                ? 'bg-emerald-50 text-emerald-700 font-semibold'
-                : 'text-gray-700 hover:text-emerald-600 hover:bg-gray-50'
-            }`}
-          >
-            <Calendar className="w-4 h-4 text-emerald-600" />
-            <span>Events</span>
-          </Link>
-
-          <Link
             to="/register"
             className={`px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 flex items-center gap-1.5 ${
               isActive('/register')
@@ -126,17 +114,7 @@ export default function Navbar() {
 
         {/* Right Auth Area (Desktop) */}
         <div className="hidden md:flex items-center gap-3">
-          {!user ? (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Login / Sign up</span>
-              </Link>
-            </div>
-          ) : (
+          {!user ? null : (
             <div className="relative" ref={dropdownRef}>
               <button
                 type="button"
@@ -274,16 +252,6 @@ export default function Navbar() {
           </Link>
 
           <Link
-            to="/events"
-            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl font-medium text-base ${
-              isActive('/events') ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Calendar className="w-5 h-5 text-emerald-600" />
-            <span>Events (Catering Gigs)</span>
-          </Link>
-
-          <Link
             to="/register"
             className={`flex items-center gap-2.5 px-4 py-3 rounded-xl font-medium text-base ${
               isActive('/register') ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-gray-700 hover:bg-gray-50'
@@ -356,18 +324,6 @@ export default function Navbar() {
                 <LogOut className="w-5 h-5" />
                 <span>Sign Out</span>
               </button>
-            </div>
-          )}
-
-          {!user && (
-            <div className="pt-2 border-t border-gray-100 mt-2">
-              <Link
-                to="/login"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 text-base shadow-sm"
-              >
-                <LogIn className="w-5 h-5" />
-                <span>Login / Sign up</span>
-              </Link>
             </div>
           )}
         </div>

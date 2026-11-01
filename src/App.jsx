@@ -53,28 +53,15 @@ function AppContent() {
           <Route path="/status/:id" element={<Status />} />
           <Route path="/verify/:id" element={<Verify />} />
 
-          {/* Auth Flow */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-
-          {/* Events Subsystem */}
-          <Route path="/events" element={<Events />} />
-          <Route path="/event" element={<Navigate to="/events" replace />} />
-          <Route path="/events/:id" element={<EventDetails />} />
-          <Route path="/my-bookings" element={<MyBookings />} />
-          <Route path="/post-event" element={<PostEvent />} />
-          <Route path="/post-events" element={<Navigate to="/post-event" replace />} />
-          <Route path="/create-event" element={<Navigate to="/post-event" replace />} />
-          <Route path="/events/new" element={<Navigate to="/post-event" replace />} />
-
-          {/* Company Portal */}
-          <Route path="/company/setup" element={<CompanySetup />} />
-          <Route path="/company/dashboard" element={<CompanyDashboard />} />
-          <Route path="/company/events/new" element={<PostEvent />} />
-          <Route path="/company/post-event" element={<Navigate to="/post-event" replace />} />
-          <Route path="/company/events/:id" element={<CompanyManageEvent />} />
-          <Route path="/company/events/:id/edit" element={<PostEvent />} />
+          {/* Events, Company Portal & Auth disabled on main branch - available on progress branch */}
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/signup" element={<Navigate to="/" replace />} />
+          <Route path="/events" element={<Navigate to="/" replace />} />
+          <Route path="/events/*" element={<Navigate to="/" replace />} />
+          <Route path="/event" element={<Navigate to="/" replace />} />
+          <Route path="/my-bookings" element={<Navigate to="/" replace />} />
+          <Route path="/post-event" element={<Navigate to="/" replace />} />
+          <Route path="/company/*" element={<Navigate to="/" replace />} />
 
           {/* Administration & Internal */}
           <Route path="/adminaccess" element={<Admin />} />
