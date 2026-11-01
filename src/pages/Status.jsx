@@ -10,6 +10,7 @@ import {
   Check,
   ExternalLink,
   User,
+  Sparkles,
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured, getPhotoPublicUrl } from '../lib/supabase'
 import { generateCertificate } from '../lib/certificate'
@@ -286,6 +287,26 @@ export default function Status() {
               </p>
             )}
           </div>
+
+          {/* FAST-TRACK AUTOMATED VERIFICATION CARD */}
+          {worker.status === 'pending' && (
+            <div className="p-5 rounded-2xl bg-white border-2 border-emerald-500 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-base">
+                <Sparkles className="w-5 h-5 text-emerald-600" />
+                <span>Fast-Track Automated Verification</span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                Skip manual review queues! Complete our quick 3-step automated verification (Phone OTP, DigiLocker Aadhaar, and Live Selfie) in under 2 minutes to unlock your official certificate immediately.
+              </p>
+              <Link
+                to={`/verify-flow?code=${encodeURIComponent(worker.worker_code)}`}
+                className="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl text-sm transition-colors shadow-xs"
+              >
+                <span>Start Automated Verification (3 Steps)</span>
+                <ExternalLink className="w-4 h-4" />
+              </Link>
+            </div>
+          )}
 
           {/* ACTIONS WHEN VERIFIED */}
           {worker.status === 'verified' && (

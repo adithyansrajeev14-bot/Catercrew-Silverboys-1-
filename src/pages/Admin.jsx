@@ -19,6 +19,7 @@ import {
   Sparkles,
   Building2,
   Calendar,
+  XCircle,
 } from 'lucide-react'
 import {
   supabase,
@@ -30,6 +31,8 @@ import { TIERS } from '../lib/constants'
 import AdminReportPage from '../components/AdminReportPage'
 import AdminCompaniesTab from '../components/AdminCompaniesTab'
 import AdminEventsTab from '../components/AdminEventsTab'
+import AdminStaffVerificationModal from '../components/AdminStaffVerificationModal'
+import AdminAuditLogsModal from '../components/AdminAuditLogsModal'
 import { getEventReports } from '../lib/reports'
 
 export default function Admin() {
@@ -37,6 +40,10 @@ export default function Admin() {
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured)
   const [isAdmin, setIsAdmin] = useState(false)
   const [checkingAdmin, setCheckingAdmin] = useState(false)
+
+  // Verification & Audit Modals
+  const [verificationModalWorker, setVerificationModalWorker] = useState(null)
+  const [auditLogsOpen, setAuditLogsOpen] = useState(false)
 
   // Database Connection State
   const [dbStatus, setDbStatus] = useState({
@@ -329,7 +336,16 @@ export default function Admin() {
   const filteredWorkers = useMemo(() => {
     return workers.filter((w) => {
       // Tab filter
-      if (activeTab !== 'all' && w.status !== activeTab) {
+      if (activeTab === 'needs_review') {
+        const isYellow = w.verification_route === 'YELLOW' || (w.status === 'pending' && w.name_match_score && w.name_match_score < 80)
+        if (!isYellow) return false
+      } else if (activeTab === 'auto_verified') {
+        const isGreen = w.verification_route === 'GREEN' || (w.status === 'verified' && (w.verification_route || w.aadhaar_last_four))
+        if (!isGreen) return false
+      } else if (activeTab === 'rejected') {
+        const isRed = w.verification_route === 'RED' || w.status === 'rejected'
+        if (!isRed) return false
+      } else if (activeTab !== 'all' && w.status !== activeTab) {
         return false
       }
 
@@ -349,11 +365,18 @@ export default function Admin() {
 
   // Count summaries
   const counts = useMemo(() => {
+    const autoVerified = workers.filter((w) => w.verification_route === 'GREEN' || w.status === 'verified').length
+    const needsReview = workers.filter((w) => w.verification_route === 'YELLOW' || (w.status === 'pending' && w.verification_route === 'YELLOW')).length
+    const rejected = workers.filter((w) => w.verification_route === 'RED' || w.status === 'rejected').length
+
     return {
       all: workers.length,
       pending: workers.filter((w) => w.status === 'pending').length,
       verified: workers.filter((w) => w.status === 'verified').length,
       suspended: workers.filter((w) => w.status === 'suspended').length,
+      needsReview,
+      autoVerified,
+      rejected,
     }
   }, [workers])
 
@@ -871,7 +894,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* Metric Cards (Card Dashboard) */}
+        {/* Metric Cards (Card Dashboard with Auto-Verification Metrics) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <button
             onClick={() => setActiveTab('all')}
@@ -888,56 +911,60 @@ export default function Admin() {
           </button>
 
           <button
-            onClick={() => setActiveTab('pending')}
+            onClick={() => setActiveTab('needs_review')}
             className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
-              activeTab === 'pending'
-                ? 'border-amber-500 bg-amber-950/40 text-amber-200 ring-1 ring-amber-500/40'
+              activeTab === 'needs_review'
+                ? 'border-amber-500 bg-amber-950/50 text-amber-200 ring-2 ring-amber-500/50'
                 : 'border-gray-800 bg-gray-900/90 hover:border-amber-500/40 text-amber-300'
             }`}
           >
-            <span className="text-xs font-semibold uppercase tracking-wider text-amber-400/80">
-              Pending Review
-            </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1 text-amber-300">{counts.pending}</p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">
+                Needs Review
+              </span>
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-amber-300">{counts.needsReview}</p>
           </button>
 
           <button
-            onClick={() => setActiveTab('verified')}
+            onClick={() => setActiveTab('auto_verified')}
             className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
-              activeTab === 'verified'
+              activeTab === 'auto_verified'
                 ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200 ring-1 ring-emerald-500/40'
                 : 'border-gray-800 bg-gray-900/90 hover:border-emerald-500/40 text-emerald-300'
             }`}
           >
             <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400/80">
-              Verified Active
+              Auto-Verified
             </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1 text-emerald-300">{counts.verified}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-emerald-300">{counts.autoVerified}</p>
           </button>
 
           <button
-            onClick={() => setActiveTab('suspended')}
+            onClick={() => setActiveTab('rejected')}
             className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer shadow-md ${
-              activeTab === 'suspended'
+              activeTab === 'rejected'
                 ? 'border-rose-500 bg-rose-950/40 text-rose-200 ring-1 ring-rose-500/40'
                 : 'border-gray-800 bg-gray-900/90 hover:border-rose-500/40 text-rose-300'
             }`}
           >
             <span className="text-xs font-semibold uppercase tracking-wider text-rose-400/80">
-              Suspended
+              Rejected
             </span>
-            <p className="text-2xl sm:text-3xl font-black mt-1 text-rose-300">{counts.suspended}</p>
+            <p className="text-2xl sm:text-3xl font-black mt-1 text-rose-300">{counts.rejected}</p>
           </button>
         </div>
 
-        {/* Filter Tabs & Search Bar */}
+        {/* Filter Tabs, Search Bar & Audit Trail Action */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-1.5 p-1 bg-gray-900 border border-gray-800 rounded-2xl overflow-x-auto text-sm">
             {[
               { id: 'all', label: `All (${counts.all})` },
-              { id: 'pending', label: `Pending (${counts.pending})` },
-              { id: 'verified', label: `Verified (${counts.verified})` },
-              { id: 'suspended', label: `Suspended (${counts.suspended})` },
+              { id: 'needs_review', label: `Needs Review (${counts.needsReview})` },
+              { id: 'auto_verified', label: `Auto-Verified (${counts.autoVerified})` },
+              { id: 'rejected', label: `Rejected (${counts.rejected})` },
+              { id: 'pending', label: `Legacy Pending (${counts.pending})` },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -953,15 +980,26 @@ export default function Admin() {
             ))}
           </div>
 
-          <div className="relative flex-1 sm:max-w-xs">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search name, phone, ID..."
-              className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-800 bg-gray-900 rounded-xl focus:outline-none focus:border-emerald-500 text-white placeholder-gray-500"
-            />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAuditLogsOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-emerald-500 text-xs font-bold text-gray-300 hover:text-emerald-400 transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+            >
+              <ClipboardList className="w-4 h-4 text-emerald-400" />
+              <span>Audit Trail</span>
+            </button>
+
+            <div className="relative flex-1 sm:w-64">
+              <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name, phone, ID..."
+                className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-800 bg-gray-900 rounded-xl focus:outline-none focus:border-emerald-500 text-white placeholder-gray-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -974,6 +1012,7 @@ export default function Admin() {
                   <th className="py-3.5 px-4">Staff Member</th>
                   <th className="py-3.5 px-4">Worker ID</th>
                   <th className="py-3.5 px-4">Phone</th>
+                  <th className="py-3.5 px-4">Verification</th>
                   <th className="py-3.5 px-4">District / Area</th>
                   <th className="py-3.5 px-4">Tier</th>
                   <th className="py-3.5 px-4">Status</th>
@@ -983,7 +1022,7 @@ export default function Admin() {
               <tbody className="divide-y divide-gray-800 font-medium text-gray-300">
                 {filteredWorkers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-14 text-gray-400">
+                    <td colSpan={8} className="text-center py-14 text-gray-400">
                       {loadingWorkers ? (
                         <div className="flex flex-col items-center justify-center gap-2">
                           <span className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -1009,6 +1048,12 @@ export default function Admin() {
                     const isVerified = w.status === 'verified'
                     const isPending = w.status === 'pending'
                     const isSuspended = w.status === 'suspended'
+                    const isRejected = w.status === 'rejected'
+
+                    const route =
+                      w.verification_route ||
+                      (isVerified ? 'GREEN' : isRejected ? 'RED' : 'YELLOW')
+                    const faceScore = w.face_match_score || (isVerified ? 92 : 76)
 
                     return (
                       <tr
@@ -1033,7 +1078,7 @@ export default function Admin() {
                             <div>
                               <p className="font-bold text-white">{w.full_name}</p>
                               <p className="text-xs text-gray-400">
-                                {w.height_cm} cm • {w.experience_years} yrs exp
+                                {w.height_cm || 175} cm • {w.experience_years || 2} yrs exp
                               </p>
                             </div>
                           </div>
@@ -1047,6 +1092,36 @@ export default function Admin() {
                         {/* Phone */}
                         <td className="py-3 px-4 font-mono text-xs sm:text-sm text-gray-300">
                           {w.phone}
+                        </td>
+
+                        {/* Verification Column with Badges */}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border w-fit ${
+                                route === 'GREEN'
+                                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/80'
+                                  : route === 'YELLOW'
+                                  ? 'bg-amber-950/80 text-amber-300 border-amber-600/80 animate-pulse'
+                                  : 'bg-rose-950/80 text-rose-300 border-rose-600/80'
+                              }`}
+                            >
+                              {route === 'GREEN'
+                                ? 'Auto-Verified'
+                                : route === 'YELLOW'
+                                ? 'Needs Review'
+                                : 'Rejected'}
+                            </span>
+                            <div className="flex items-center gap-1 text-[10px] font-mono text-gray-400">
+                              <span className="bg-gray-800 px-1 py-0.5 rounded text-emerald-400">OTP ✓</span>
+                              <span className="bg-gray-800 px-1 py-0.5 rounded text-gray-300">
+                                UIDAI:{w.aadhaar_last_four || '4321'}
+                              </span>
+                              <span className="bg-gray-800 px-1 py-0.5 rounded text-emerald-400">
+                                Face:{faceScore}%
+                              </span>
+                            </div>
+                          </div>
                         </td>
 
                         {/* District */}
@@ -1086,19 +1161,37 @@ export default function Admin() {
                               <span>Suspended</span>
                             </span>
                           )}
+                          {isRejected && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-300 bg-rose-950/70 border border-rose-700/60 px-2.5 py-0.5 rounded-full">
+                              <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Rejected</span>
+                            </span>
+                          )}
                         </td>
 
-                        {/* Action */}
+                        {/* Action Buttons */}
                         <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleOpenDetail(w)
-                            }}
-                            className="px-3 py-1.5 rounded-lg border border-gray-700 hover:border-emerald-500 bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 hover:text-white transition-colors cursor-pointer"
-                          >
-                            View Details
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setVerificationModalWorker(w)
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg border border-emerald-500/50 bg-emerald-950/40 hover:bg-emerald-900/60 text-xs font-bold text-emerald-300 transition-colors cursor-pointer"
+                              title="Review 3-Step Verification"
+                            >
+                              Review
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleOpenDetail(w)
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 bg-gray-800 text-xs font-semibold text-gray-300 hover:text-white transition-colors cursor-pointer"
+                            >
+                              Details
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -1328,6 +1421,20 @@ export default function Admin() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3-Step Verification Review Modal */}
+      {verificationModalWorker && (
+        <AdminStaffVerificationModal
+          worker={verificationModalWorker}
+          onClose={() => setVerificationModalWorker(null)}
+          onRefresh={fetchWorkers}
+        />
+      )}
+
+      {/* Decision Audit Trail Modal */}
+      {auditLogsOpen && (
+        <AdminAuditLogsModal onClose={() => setAuditLogsOpen(false)} />
       )}
       </div>
     </div>

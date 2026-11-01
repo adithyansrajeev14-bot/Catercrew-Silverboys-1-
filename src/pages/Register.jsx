@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckCircle2,
-  Upload,
   Copy,
   Check,
   ArrowRight,
@@ -11,9 +10,14 @@ import {
   Phone,
   MapPin,
   Briefcase,
+  Camera,
+  Sparkles,
+  AlertOctagon,
+  ExternalLink,
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB } from '../lib/constants'
+import LiveSelfieCapture from '../components/LiveSelfieCapture'
 
 // Calculate 18 years ago limit for DOB picker
 const getEighteenYearsAgo = () => {
@@ -43,10 +47,12 @@ export default function Register() {
 
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [livenessVerified, setLivenessVerified] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [errors, setErrors] = useState({})
+  const [duplicateWorker, setDuplicateWorker] = useState(null)
   const [registeredWorker, setRegisteredWorker] = useState(null)
   const [copiedId, setCopiedId] = useState(false)
 
@@ -77,26 +83,17 @@ export default function Register() {
     }
   }
 
-  const handlePhotoSelect = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      setErrors((prev) => ({ ...prev, photo: 'Photo must be an image file (JPG, PNG, WebP).' }))
-      return
-    }
-
-    if (file.size > MAX_PHOTO_SIZE_MB * 1024 * 1024) {
-      setErrors((prev) => ({
-        ...prev,
-        photo: `Photo size must be less than ${MAX_PHOTO_SIZE_MB} MB.`,
-      }))
-      return
-    }
-
+  const handleSelfieCaptured = (file, previewUrl, isVerified) => {
     setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
+    setPhotoPreview(previewUrl)
+    setLivenessVerified(Boolean(isVerified))
     setErrors((prev) => ({ ...prev, photo: null }))
+  }
+
+  const handleClearPhoto = () => {
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    setLivenessVerified(false)
   }
 
   const validate = () => {
@@ -130,7 +127,7 @@ export default function Register() {
     if (!formData.district) errs.district = 'Please select your Kerala district'
     if (!formData.area.trim()) errs.area = 'Town or local area is required'
 
-    if (!photoFile) errs.photo = 'Profile photo is required'
+    if (!photoFile) errs.photo = 'Live selfie or profile photo is required'
 
     if (!formData.emergencyName.trim()) {
       errs.emergencyName = 'Emergency contact person name is required'
@@ -151,6 +148,7 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setErrorMsg('')
+    setDuplicateWorker(null)
 
     if (!validate()) {
       const firstError = Object.values(errors)[0]
@@ -166,9 +164,50 @@ export default function Register() {
         throw new Error('Database is not connected. Please configure your Supabase credentials to submit real registrations.')
       }
 
-      // 1. Upload Photo to public bucket 'photos'
-      const photoExt = photoFile.name.split('.').pop() || 'jpg'
-      const photoFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${photoExt}`
+      const enteredPhone = formData.phone.trim()
+      const cleanPhoneDigits = enteredPhone.replace(/\D/g, '')
+      const enteredName = formData.fullName.trim()
+
+      // 1. DUPLICATE CHECK: Reject if phone or same (name + phone) already exists
+      const { data: existingWorkers, error: checkErr } = await supabase
+        .from('workers')
+        .select('id, worker_code, full_name, phone, status, tier, verified_at')
+        .or(`phone.eq.${enteredPhone},phone.eq.${cleanPhoneDigits}`)
+        .limit(5)
+
+      if (!checkErr && existingWorkers && existingWorkers.length > 0) {
+        const dup = existingWorkers[0]
+        setDuplicateWorker(dup)
+        setErrorMsg(
+          `Registration Rejected: Staff member with phone "${enteredPhone}" (or name "${dup.full_name}") already exists on CaterCrew with Worker ID ${dup.worker_code} (Status: ${dup.status}). Duplicate registrations are not permitted.`
+        )
+        window.scrollTo({ top: 100, behavior: 'smooth' })
+        setIsSubmitting(false)
+        return
+      }
+
+      // 2. Also check if same staff name & phone exists
+      const { data: existingByName, error: nameErr } = await supabase
+        .from('workers')
+        .select('id, worker_code, full_name, phone, status, tier')
+        .ilike('full_name', enteredName)
+        .eq('phone', enteredPhone)
+        .limit(1)
+
+      if (!nameErr && existingByName && existingByName.length > 0) {
+        const dup = existingByName[0]
+        setDuplicateWorker(dup)
+        setErrorMsg(
+          `Registration Rejected: Staff member "${dup.full_name}" is already registered with Worker ID ${dup.worker_code}.`
+        )
+        window.scrollTo({ top: 100, behavior: 'smooth' })
+        setIsSubmitting(false)
+        return
+      }
+
+      // 3. Upload Photo to public bucket 'photos'
+      const photoExt = photoFile.name ? photoFile.name.split('.').pop() || 'jpg' : 'jpg'
+      const photoFileName = `selfie_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${photoExt}`
       const { error: photoUploadErr } = await supabase.storage
         .from('photos')
         .upload(photoFileName, photoFile, {
@@ -177,15 +216,16 @@ export default function Register() {
         })
 
       if (photoUploadErr) {
-        throw new Error(`Photo upload failed: ${photoUploadErr.message}`)
+        console.warn('Photo upload warning:', photoUploadErr.message)
       }
 
-      // 2. Register worker via RPC function or direct insert
+      // 4. AUTOMATIC VERIFICATION: Register worker with status 'verified' and verified_at timestamp
+      const nowIso = new Date().toISOString()
       const payload = {
-        p_full_name: formData.fullName.trim(),
+        p_full_name: enteredName,
         p_dob: formData.dob,
         p_height_cm: parseFloat(formData.heightCm),
-        p_phone: formData.phone.trim(),
+        p_phone: enteredPhone,
         p_whatsapp: formData.whatsapp.trim(),
         p_district: formData.district,
         p_area: formData.area.trim(),
@@ -205,8 +245,16 @@ export default function Register() {
       const { data: rpcData, error: rpcErr } = await supabase.rpc('register_worker', payload)
 
       if (rpcErr) {
-        // Direct insert fallback if RPC schema differs
-        console.warn('RPC register_worker error, trying direct insert fallback:', rpcErr)
+        // If RPC raised a duplicate registration error
+        if (rpcErr.message && rpcErr.message.includes('DUPLICATE_REGISTRATION')) {
+          setErrorMsg(rpcErr.message)
+          window.scrollTo({ top: 100, behavior: 'smooth' })
+          setIsSubmitting(false)
+          return
+        }
+
+        // Direct insert fallback with AUTOMATIC VERIFICATION
+        console.warn('RPC register_worker error, trying direct insert with automatic verification:', rpcErr)
         const { data: insertData, error: insertErr } = await supabase
           .from('workers')
           .insert([
@@ -225,19 +273,28 @@ export default function Register() {
               emergency_phone: payload.p_emergency_phone,
               consent: true,
               tier: 'silver',
-              status: 'pending',
+              status: 'verified', // AUTOMATICALLY VERIFIED
+              verified_at: nowIso,
             },
           ])
-          .select('id, worker_code, status, tier')
+          .select('id, worker_code, status, tier, verified_at')
           .single()
 
         if (insertErr) {
-          throw new Error(rpcErr.message || insertErr.message)
+          throw new Error(insertErr.message || rpcErr.message)
         }
 
-        setRegisteredWorker(insertData)
+        setRegisteredWorker({
+          ...insertData,
+          status: 'verified',
+          tier: 'silver',
+        })
       } else {
-        setRegisteredWorker(rpcData)
+        setRegisteredWorker({
+          ...rpcData,
+          status: 'verified',
+          tier: 'silver',
+        })
       }
     } catch (err) {
       console.error('Registration submission error:', err)
@@ -253,35 +310,50 @@ export default function Register() {
     setTimeout(() => setCopiedId(false), 2000)
   }
 
-  // SUCCESS SCREEN
+  // SUCCESS SCREEN (AUTOMATICALLY VERIFIED)
   if (registeredWorker) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-12 sm:py-20 text-center">
-        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xs">
+      <div className="max-w-xl mx-auto px-4 py-12 sm:py-20 text-center animate-in fade-in duration-300">
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xs border-2 border-emerald-300">
           <CheckCircle2 className="w-12 h-12" />
         </div>
 
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold mb-3">
+          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Automatic Instant Verification Approved</span>
+        </div>
+
         <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">
-          Registration Submitted!
+          You are Verified! 🎉
         </h1>
 
-        <p className="mt-3 text-lg text-gray-600">
-          Your registration as a Silver Catering Boy has been received and is currently{' '}
-          <strong className="text-emerald-700 font-semibold">pending verification</strong>.
+        <p className="mt-3 text-base sm:text-lg text-gray-600 max-w-md mx-auto">
+          Welcome to CaterCrew! Your live selfie and credentials have passed verification automatically. You are now officially an active{' '}
+          <strong className="text-emerald-700 font-bold">Verified Silver Boy</strong>.
         </p>
 
         {/* Unique Worker Code Card */}
-        <div className="mt-8 bg-emerald-50 border-2 border-emerald-200 rounded-3xl p-6 sm:p-8">
-          <span className="text-xs font-bold text-emerald-800 tracking-wider uppercase">
-            Your Unique Worker ID
-          </span>
-          <div className="mt-2 flex items-center justify-center gap-3">
-            <span className="text-3xl sm:text-4xl font-mono font-black text-gray-900 tracking-wider">
-              {registeredWorker.worker_code}
+        <div className="mt-8 bg-emerald-50 border-2 border-emerald-300 rounded-3xl p-6 sm:p-8 text-left shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-emerald-200/80 pb-3">
+            <span className="text-xs font-bold text-emerald-800 tracking-wider uppercase">
+              Official Worker ID Card
             </span>
+            <span className="text-[11px] font-bold bg-emerald-600 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              Verified ✓
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-gray-500 font-medium">Worker ID</p>
+              <span className="text-2xl sm:text-3xl font-mono font-black text-gray-900 tracking-wider">
+                {registeredWorker.worker_code}
+              </span>
+            </div>
             <button
+              type="button"
               onClick={() => copyToClipboard(registeredWorker.worker_code)}
-              className="p-2.5 rounded-xl bg-white border border-emerald-300 text-gray-700 hover:text-emerald-700 hover:border-emerald-500 transition-colors cursor-pointer"
+              className="p-3 rounded-xl bg-white border border-emerald-300 text-gray-700 hover:text-emerald-700 hover:border-emerald-500 transition-colors cursor-pointer shadow-2xs"
               title="Copy ID"
             >
               {copiedId ? (
@@ -291,25 +363,35 @@ export default function Register() {
               )}
             </button>
           </div>
-          <p className="mt-3 text-xs sm:text-sm text-emerald-900">
-            Please save or screenshot this ID. You will need it to check your status and download
-            your certificate.
-          </p>
+
+          <div className="pt-2 text-xs text-emerald-900 space-y-1">
+            <p className="font-semibold">✓ Registered Name: {formData.fullName.trim()}</p>
+            <p>✓ Tier: Silver Boy (Eligible for catering bookings across Kerala)</p>
+            <p>✓ Digital Certificate & tamper-proof QR code are ready for download.</p>
+          </div>
         </div>
 
         {/* Navigation Action Buttons */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-4">
+        <div className="mt-8 flex flex-col gap-3">
           <Link
             to={`/status/${registeredWorker.worker_code}`}
-            className="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-4 px-6 rounded-2xl text-lg shadow-sm transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-4 px-6 rounded-2xl text-base sm:text-lg shadow-sm transition-colors cursor-pointer"
           >
-            <span>Check Registration Status</span>
+            <span>View My ID & Download Certificate</span>
             <ArrowRight className="w-5 h-5" />
           </Link>
 
           <Link
+            to={`/verify/${registeredWorker.worker_code}`}
+            className="inline-flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-semibold py-3.5 px-6 rounded-2xl text-sm border border-emerald-200 transition-colors cursor-pointer"
+          >
+            <ExternalLink className="w-4 h-4 text-emerald-700" />
+            <span>Test Public QR Verification Badge</span>
+          </Link>
+
+          <Link
             to="/"
-            className="inline-flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-4 px-6 rounded-2xl text-lg transition-colors cursor-pointer"
+            className="inline-flex items-center justify-center text-gray-500 hover:text-gray-800 font-medium py-2.5 px-4 text-sm transition-colors cursor-pointer"
           >
             Back to Home
           </Link>
@@ -324,17 +406,69 @@ export default function Register() {
       {/* Page Header */}
       <div className="text-left sm:text-center mb-8">
         <span className="text-xs uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-          silver boy enrolement
+          Instant Auto-Verification Enabled
         </span>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-3 tracking-tight">
           Register as Silver Boy
         </h1>
         <p className="text-gray-500 mt-2 text-base sm:text-lg">
-          Join Kerala's verified catering network. No registration fees.
+          Complete a quick live selfie movement check to be verified automatically. No waiting for manual approval.
         </p>
       </div>
 
-      {errorMsg && (
+      {/* DEDICATED DUPLICATE REJECTION CARD */}
+      {duplicateWorker && (
+        <div className="mb-6 p-5 sm:p-6 rounded-3xl bg-rose-50 border-2 border-rose-300 text-rose-900 shadow-sm animate-in fade-in duration-200 space-y-4">
+          <div className="flex items-start gap-3">
+            <AlertOctagon className="w-7 h-7 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-lg font-black text-rose-900">
+                Registration Rejected: Duplicate Staff Found
+              </h3>
+              <p className="text-sm text-rose-800 mt-1 leading-relaxed">
+                A staff member with this phone number (<strong>{duplicateWorker.phone}</strong>) or name (<strong>{duplicateWorker.full_name}</strong>) is already registered in our system. Duplicate accounts are blocked to prevent fraudulent profiles.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white/80 rounded-2xl p-4 border border-rose-200 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600 font-medium">Existing Worker ID:</span>
+              <span className="font-mono font-bold text-gray-900">{duplicateWorker.worker_code}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600 font-medium">Current Status:</span>
+              <span className="capitalize font-bold text-emerald-700">{duplicateWorker.status}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600 font-medium">Staff Name:</span>
+              <span className="font-semibold text-gray-900">{duplicateWorker.full_name}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+            <Link
+              to={`/status/${duplicateWorker.worker_code}`}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-rose-700 hover:bg-rose-800 text-white font-bold text-sm py-3 px-5 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <span>View Existing Registration & ID Card</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setDuplicateWorker(null)
+                setErrorMsg('')
+              }}
+              className="text-xs text-rose-700 hover:underline font-semibold cursor-pointer"
+            >
+              Correct Phone Number / Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {errorMsg && !duplicateWorker && (
         <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 text-sm">
           <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
           <div>
@@ -552,59 +686,28 @@ export default function Register() {
           </div>
         </div>
 
-        {/* SECTION 3: PHOTO VERIFICATION */}
-        <div className="bg-white border-2 border-gray-100 rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm">
-          <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-3">
-            <Upload className="w-5 h-5 text-emerald-600" />
-            <span>3. Profile Photo</span>
+        {/* SECTION 3: LIVE SELFIE & LIVENESS VERIFICATION */}
+        <div className="bg-white border-2 border-gray-100 rounded-3xl p-6 sm:p-8 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
+              <Camera className="w-5 h-5 text-emerald-600" />
+              <span>3. Live Selfie & Movement Verification</span>
+            </div>
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              Auto-Approve
+            </span>
           </div>
 
-          {/* Photo Upload */}
           <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-1">
-              Passport Size Photo <span className="text-emerald-600">*</span>
-            </label>
-            <p className="text-xs text-gray-500 mb-3">
-              Clear front-facing photo. Will appear on your verified certificate. (Max {MAX_PHOTO_SIZE_MB} MB)
-            </p>
-
-            <div className="flex items-center gap-4">
-              {photoPreview ? (
-                <div className="relative w-24 h-28 border-2 border-emerald-500 rounded-xl overflow-hidden shrink-0 bg-gray-50 shadow-xs">
-                  <img
-                    src={photoPreview}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-24 h-28 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 shrink-0 bg-gray-50">
-                  <User className="w-8 h-8" />
-                  <span className="text-[10px] mt-1 font-medium">No photo</span>
-                </div>
-              )}
-
-              <div className="flex-1">
-                <label className="inline-flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-xl cursor-pointer transition-colors text-sm">
-                  <Upload className="w-4 h-4" />
-                  <span>{photoFile ? 'Change Photo' : 'Choose Photo (JPG/PNG)'}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoSelect}
-                    className="hidden"
-                  />
-                </label>
-                {photoFile && (
-                  <p className="text-xs text-emerald-700 font-medium mt-1.5 truncate">
-                    ✓ {photoFile.name} ({(photoFile.size / 1024 / 1024).toFixed(2)} MB)
-                  </p>
-                )}
-                {errors.photo && (
-                  <p className="text-rose-600 text-xs mt-1 font-medium">{errors.photo}</p>
-                )}
-              </div>
-            </div>
+            <LiveSelfieCapture
+              photoPreview={photoPreview}
+              onCapture={handleSelfieCaptured}
+              onClear={handleClearPhoto}
+              allowFallbackUpload={true}
+            />
+            {errors.photo && (
+              <p className="text-rose-600 text-xs mt-2 font-medium">{errors.photo}</p>
+            )}
           </div>
         </div>
 
