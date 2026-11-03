@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB } from '../lib/constants'
-import LiveSelfieCapture from '../components/LiveSelfieCapture'
+import { compressImage } from '../lib/imageCompression'
 
 // Calculate 18 years ago limit for DOB picker
 const getEighteenYearsAgo = () => {
@@ -47,7 +47,9 @@ export default function Register() {
 
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
-  const [livenessVerified, setLivenessVerified] = useState(false)
+  const [thumbBlob, setThumbBlob] = useState(null)
+  const [photoInfo, setPhotoInfo] = useState(null)
+  const [isOptimizingPhoto, setIsOptimizingPhoto] = useState(false)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -83,17 +85,38 @@ export default function Register() {
     }
   }
 
-  const handleSelfieCaptured = (file, previewUrl, isVerified) => {
-    setPhotoFile(file)
-    setPhotoPreview(previewUrl)
-    setLivenessVerified(Boolean(isVerified))
+  const handlePhotoSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
     setErrors((prev) => ({ ...prev, photo: null }))
+    setErrorMsg('')
+    setIsOptimizingPhoto(true)
+
+    try {
+      const result = await compressImage(file)
+      setPhotoFile(result.file)
+      setThumbBlob(result.thumbBlob)
+      setPhotoPreview(result.previewUrl)
+      setPhotoInfo({
+        originalKb: Math.round(file.size / 1024),
+        compressedKb: Math.round(result.sizeBytes / 1024),
+        quality: result.qualityUsed,
+      })
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, photo: err.message || 'Failed to optimize photo.' }))
+    } finally {
+      setIsOptimizingPhoto(false)
+      if (e.target) e.target.value = ''
+    }
   }
 
   const handleClearPhoto = () => {
     setPhotoFile(null)
+    setThumbBlob(null)
     setPhotoPreview(null)
-    setLivenessVerified(false)
+    setPhotoInfo(null)
+    setErrors((prev) => ({ ...prev, photo: null }))
   }
 
   const validate = () => {
@@ -127,7 +150,7 @@ export default function Register() {
     if (!formData.district) errs.district = 'Please select your Kerala district'
     if (!formData.area.trim()) errs.area = 'Town or local area is required'
 
-    if (!photoFile) errs.photo = 'Live selfie or profile photo is required'
+    if (!photoFile) errs.photo = 'Profile photo is required'
 
     if (!formData.emergencyName.trim()) {
       errs.emergencyName = 'Emergency contact person name is required'
@@ -205,18 +228,31 @@ export default function Register() {
         return
       }
 
-      // 3. Upload Photo to public bucket 'photos'
-      const photoExt = photoFile.name ? photoFile.name.split('.').pop() || 'jpg' : 'jpg'
-      const photoFileName = `selfie_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${photoExt}`
+      // 3. Upload Compressed Photo to public bucket 'photos' with cacheControl '31536000'
+      const photoFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`
       const { error: photoUploadErr } = await supabase.storage
         .from('photos')
         .upload(photoFileName, photoFile, {
-          cacheControl: '3600',
-          upsert: false,
+          cacheControl: '31536000',
+          upsert: true,
+          contentType: 'image/jpeg',
         })
 
       if (photoUploadErr) {
         console.warn('Photo upload warning:', photoUploadErr.message)
+      }
+
+      // Upload thumbnail to save egress in list views
+      if (thumbBlob) {
+        const thumbFileName = photoFileName.replace('.jpg', '_thumb.jpg')
+        supabase.storage
+          .from('photos')
+          .upload(thumbFileName, thumbBlob, {
+            cacheControl: '31536000',
+            upsert: true,
+            contentType: 'image/jpeg',
+          })
+          .catch((err) => console.warn('Thumbnail upload warning:', err))
       }
 
       // 4. AUTOMATIC VERIFICATION: Register worker with status 'verified' and verified_at timestamp
@@ -686,28 +722,75 @@ export default function Register() {
           </div>
         </div>
 
-        {/* SECTION 3: LIVE SELFIE & LIVENESS VERIFICATION */}
-        <div className="bg-white border-2 border-gray-100 rounded-3xl p-6 sm:p-8 space-y-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
-              <Camera className="w-5 h-5 text-emerald-600" />
-              <span>3. Live Selfie & Movement Verification</span>
-            </div>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-              Auto-Approve
-            </span>
+        {/* SECTION 3: PHOTO UPLOAD */}
+        <div className="bg-white border-2 border-gray-100 rounded-3xl p-6 sm:p-8 space-y-4 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-3">
+            <Camera className="w-5 h-5 text-emerald-600" />
+            <span>3. Profile Photo</span>
           </div>
 
-          <div>
-            <LiveSelfieCapture
-              photoPreview={photoPreview}
-              onCapture={handleSelfieCaptured}
-              onClear={handleClearPhoto}
-              allowFallbackUpload={true}
-            />
-            {errors.photo && (
-              <p className="text-rose-600 text-xs mt-2 font-medium">{errors.photo}</p>
+          <p className="text-xs text-gray-500">
+            Clear front-facing photo. Will appear on your verified certificate. Automatically compressed to under 100 KB for fast loading.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {photoPreview ? (
+              <div className="relative group">
+                <img
+                  src={photoPreview}
+                  alt="Profile Preview"
+                  className="w-24 h-32 rounded-2xl object-cover border-2 border-emerald-500 shadow-sm"
+                />
+              </div>
+            ) : (
+              <div className="w-24 h-32 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400">
+                <Camera className="w-8 h-8" />
+                <span className="text-[10px] mt-1 font-medium">No photo</span>
+              </div>
             )}
+
+            <div className="flex-1 w-full space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold cursor-pointer transition-colors shadow-xs">
+                  <Camera className="w-4 h-4" />
+                  <span>{photoFile ? 'Change Photo' : 'Choose Photo (JPG/PNG)'}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoSelect}
+                    disabled={isOptimizingPhoto}
+                    className="hidden"
+                  />
+                </label>
+
+                {photoFile && (
+                  <button
+                    type="button"
+                    onClick={handleClearPhoto}
+                    className="px-3.5 py-3 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              {isOptimizingPhoto && (
+                <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold animate-pulse">
+                  <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Optimizing & compressing photo...</span>
+                </div>
+              )}
+
+              {photoInfo && !isOptimizingPhoto && (
+                <p className="text-xs text-emerald-700 font-medium">
+                  ✓ Optimized: {photoInfo.compressedKb} KB (reduced from {photoInfo.originalKb} KB)
+                </p>
+              )}
+
+              {errors.photo && (
+                <p className="text-rose-600 text-xs mt-1 font-medium">{errors.photo}</p>
+              )}
+            </div>
           </div>
         </div>
 
