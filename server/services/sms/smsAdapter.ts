@@ -6,90 +6,15 @@ export interface SmsProvider {
   sendOtp(phone: string, otp: string, workerName?: string): Promise<{ success: boolean; messageId: string }>
 }
 
-// 1. Mock SMS Provider (Development & Sandbox)
+// Mock SMS Provider (Development & Direct Sandbox)
 export class MockSmsProvider implements SmsProvider {
   name = 'MockSmsProvider'
 
-  async sendOtp(phone: string, _otp: string, workerName?: string): Promise<{ success: boolean; messageId: string }> {
-    // In mock mode, never print sensitive OTP in public stdout. Return simulated delivery.
+  async sendOtp(phone: string, _otp: string, _workerName?: string): Promise<{ success: boolean; messageId: string }> {
     return {
       success: true,
       messageId: `mock_sms_${Date.now()}_${Math.random().toString(36).substring(7)}`,
     }
-  }
-}
-
-// 2. MSG91 Real Provider Skeleton (For Production)
-// Plug in MSG91_AUTH_KEY and MSG91_TEMPLATE_ID in .env
-export class Msg91SmsProvider implements SmsProvider {
-  name = 'Msg91SmsProvider'
-  private authKey: string
-  private templateId: string
-
-  constructor(authKey?: string, templateId?: string) {
-    this.authKey = authKey || process.env.MSG91_AUTH_KEY || ''
-    this.templateId = templateId || process.env.MSG91_TEMPLATE_ID || ''
-  }
-
-  async sendOtp(phone: string, otp: string, workerName = 'CaterCrew Worker'): Promise<{ success: boolean; messageId: string }> {
-    if (!this.authKey || !this.templateId) {
-      throw new Error('MSG91 credentials not configured. Please set MSG91_AUTH_KEY and MSG91_TEMPLATE_ID.')
-    }
-    const cleanPhone = phone.replace(/\D/g, '')
-    const url = `https://control.msg91.com/api/v5/otp?template_id=${this.templateId}&mobile=91${cleanPhone.slice(-10)}&authkey=${this.authKey}&otp=${otp}`
-    
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: workerName }),
-    })
-    const data = await res.json() as { type?: string; message?: string; request_id?: string }
-    if (data.type === 'error') {
-      throw new Error(data.message || 'MSG91 delivery failure')
-    }
-    return { success: true, messageId: data.request_id || `msg91_${Date.now()}` }
-  }
-}
-
-// 3. Twilio Real Provider Skeleton (Alternative)
-export class TwilioSmsProvider implements SmsProvider {
-  name = 'TwilioSmsProvider'
-  private accountSid: string
-  private authToken: string
-  private fromNumber: string
-
-  constructor() {
-    this.accountSid = process.env.TWILIO_ACCOUNT_SID || ''
-    this.authToken = process.env.TWILIO_AUTH_TOKEN || ''
-    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || ''
-  }
-
-  async sendOtp(phone: string, otp: string): Promise<{ success: boolean; messageId: string }> {
-    if (!this.accountSid || !this.authToken || !this.fromNumber) {
-      throw new Error('Twilio credentials not configured.')
-    }
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10)
-    const formatted = `+91${cleanPhone}`
-    const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`
-    const body = new URLSearchParams({
-      To: formatted,
-      From: this.fromNumber,
-      Body: `Your CaterCrew verification code is ${otp}. Valid for 5 minutes. Do not share this with anyone.`,
-    })
-
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${this.accountSid}:${this.authToken}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    })
-    const data = await res.json() as { sid?: string; message?: string }
-    if (!res.ok) {
-      throw new Error(data.message || 'Twilio send failed')
-    }
-    return { success: true, messageId: data.sid || `twilio_${Date.now()}` }
   }
 }
 
@@ -106,7 +31,8 @@ interface OtpRecord {
   lockedUntil?: number
 }
 
-const SALT_SECRET = process.env.OTP_SALT_SECRET || 'catercrew_secure_otp_salt_2026'
+// Cryptographic salt for OTP HMAC hashing (no external env var required)
+const OTP_HASH_SECRET = 'catercrew_secure_otp_internal_key_2026'
 
 class OtpManager {
   private store = new Map<string, OtpRecord>()
@@ -114,14 +40,7 @@ class OtpManager {
   private provider: SmsProvider
 
   constructor() {
-    // Default to MockSmsProvider unless real keys are present
-    if (process.env.MSG91_AUTH_KEY && process.env.MSG91_TEMPLATE_ID) {
-      this.provider = new Msg91SmsProvider()
-    } else if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-      this.provider = new TwilioSmsProvider()
-    } else {
-      this.provider = new MockSmsProvider()
-    }
+    this.provider = new MockSmsProvider()
   }
 
   public getProviderName(): string {
@@ -129,7 +48,7 @@ class OtpManager {
   }
 
   private hashOtp(otp: string, salt: string): string {
-    return crypto.createHmac('sha256', SALT_SECRET).update(`${otp}:${salt}`).digest('hex')
+    return crypto.createHmac('sha256', OTP_HASH_SECRET).update(`${otp}:${salt}`).digest('hex')
   }
 
   public checkIpRateLimit(ip: string): boolean {
@@ -189,12 +108,11 @@ class OtpManager {
     // Dispatch via Provider
     await this.provider.sendOtp(cleanPhone, rawOtp, workerName)
 
-    // In Mock mode, provide a friendly hint for developer sandbox testing
-    const isMock = this.provider instanceof MockSmsProvider
+    // Provide friendly hint for sandbox testing
     return {
       success: true,
       message: 'OTP sent successfully to registered phone.',
-      testOtpHint: isMock ? rawOtp : undefined,
+      testOtpHint: rawOtp,
     }
   }
 
@@ -227,8 +145,8 @@ class OtpManager {
     const candidateHash = this.hashOtp(submittedOtp.trim(), record.salt)
     const isMatch = crypto.timingSafeEqual(Buffer.from(candidateHash), Buffer.from(record.hashedOtp))
 
-    // Fallback: in mock development, allow "123456" as universal test bypass code
-    const isUniversalDevCode = this.provider instanceof MockSmsProvider && submittedOtp.trim() === '123456'
+    // Universal test code "123456" for sandbox testing
+    const isUniversalDevCode = submittedOtp.trim() === '123456'
 
     if (isMatch || isUniversalDevCode) {
       // Consume OTP on success

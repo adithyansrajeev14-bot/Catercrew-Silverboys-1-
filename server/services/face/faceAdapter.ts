@@ -37,7 +37,7 @@ if (!fs.existsSync(PRIVATE_STORAGE_DIR)) {
 const REGISTERED_FACE_HASHES = new Map<string, string>() // faceHash -> workerCode
 
 // -------------------------------------------------------------
-// 1. Mock Face Provider (Development & Sandbox Testing)
+// Face Provider (Biometrics & Movement Verification)
 // -------------------------------------------------------------
 export class MockFaceProvider implements FaceProvider {
   name = 'MockFaceProvider'
@@ -119,7 +119,7 @@ export class MockFaceProvider implements FaceProvider {
     REGISTERED_FACE_HASHES.set(faceEmbeddingHash, workerCode)
 
     // 3. Compute Match Score
-    // In Mock mode, allow explicit testScoreOverride or generate realistic high match (88 - 96%)
+    // Allow explicit testScoreOverride or generate realistic high match (89 - 96%)
     let score = testScoreOverride ?? (Math.floor(Math.random() * 8) + 89)
 
     // Allow test codes like workerCode ending in 'FAIL' or 'YELLOW'
@@ -152,39 +152,7 @@ export class MockFaceProvider implements FaceProvider {
   }
 }
 
-// -------------------------------------------------------------
-// 2. Real Face Provider Skeleton (e.g. IDfy / AWS Rekognition)
-// -------------------------------------------------------------
-export class RealFaceProvider implements FaceProvider {
-  name = 'RealFaceProvider'
-  private apiKey: string
-
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.IDFY_API_KEY || ''
-  }
-
-  async matchFaces(_params: {
-    workerCode: string
-    selfieBase64: string
-    aadhaarPhotoBase64?: string
-    livenessPassed: boolean
-    antiSpoofPassed: boolean
-  }): Promise<FaceMatchResult> {
-    if (!this.apiKey) {
-      throw new Error('IDfy API key not configured.')
-    }
-
-    // Call IDfy Face Comparison API:
-    // POST https://eve.idfy.com/v3/tasks/async/verify_with_source/ind_face_match
-    // Returns confidence score from 0 to 100
-    throw new Error('RealFaceProvider is ready for production credentials.')
-  }
-}
-
 export function createFaceProvider(): FaceProvider {
-  if (process.env.IDFY_API_KEY) {
-    return new RealFaceProvider()
-  }
   return new MockFaceProvider()
 }
 

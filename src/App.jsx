@@ -7,7 +7,6 @@ import Status from './pages/Status'
 import Verify from './pages/Verify'
 import Admin from './pages/Admin'
 import EventReport from './pages/EventReport'
-import VerificationFlow from './pages/VerificationFlow'
 
 // Events & Company & Auth Pages
 import Login from './pages/Login'
@@ -53,12 +52,6 @@ function AppContent() {
           <Route path="/status" element={<Status />} />
           <Route path="/status/:id" element={<Status />} />
           <Route path="/verify/:id" element={<Verify />} />
-
-          {/* Automated 3-Step Verification Flow */}
-          <Route path="/verify-flow" element={<VerificationFlow />} />
-          <Route path="/verify-flow/:code" element={<VerificationFlow />} />
-          <Route path="/verify-step" element={<VerificationFlow />} />
-          <Route path="/verify-step/:code" element={<VerificationFlow />} />
 
           {/* Events, Company Portal & Auth disabled on main branch - available on progress branch */}
           <Route path="/login" element={<Navigate to="/" replace />} />

@@ -117,8 +117,11 @@ export function calculateAge(dobString: string): number {
   return age
 }
 
+// Internal salt for Aadhaar reference hashing
+const AADHAAR_HASH_SALT = 'catercrew_aadhaar_ref_salt_2026'
+
 // -------------------------------------------------------------
-// 1. Mock Identity Provider (Development, Testing & Edge-Case Demos)
+// Identity Provider (Sandbox & Edge-Case Testing)
 // -------------------------------------------------------------
 export class MockIdentityProvider implements IdentityProvider {
   name = 'MockIdentityProvider'
@@ -178,7 +181,6 @@ export class MockIdentityProvider implements IdentityProvider {
     }
 
     const lastFour = tx.lastFour
-    const saltSecret = process.env.AADHAAR_SALT_SECRET || 'catercrew_aadhaar_ref_salt_2026'
 
     // Built-in test edge case handling by last 4 digits:
     // 0017 -> Underage (17 years old) -> Triggers RED
@@ -191,29 +193,25 @@ export class MockIdentityProvider implements IdentityProvider {
     let providerRef = `uidai_ref_${lastFour}_${tx.workerCode}`
 
     if (lastFour === '0017') {
-      // Underage test case: 17 years old
       const currentYear = new Date().getFullYear()
       dob = `${currentYear - 17}-04-10`
       verifiedName = 'Vineeth Kumar'
     } else if (lastFour === '0099') {
-      // Name mismatch test case
       verifiedName = 'Rahul Sharma (UIDAI Match)'
       dob = '2001-11-20'
     } else if (lastFour === '0088') {
-      // Duplicate identity test case (deterministic ref)
       providerRef = 'uidai_ref_known_duplicate_identity_88'
       verifiedName = 'Suresh Babu'
       dob = '2000-02-15'
     }
 
     const saltedHashRef = crypto
-      .createHmac('sha256', saltSecret)
+      .createHmac('sha256', AADHAAR_HASH_SALT)
       .update(providerRef)
       .digest('hex')
 
     const calculatedAge = calculateAge(dob)
 
-    // Clean mock portrait photo (neutral avatar data URL for face comparison)
     const mockAadhaarPhoto =
       'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23e2e8f0"/><circle cx="150" cy="110" r="50" fill="%2394a3b8"/><path d="M70,260 C70,190 230,190 230,260" fill="%2364748b"/></svg>'
 
@@ -229,7 +227,7 @@ export class MockIdentityProvider implements IdentityProvider {
       gender: 'M',
       saltedHashRef,
       photoBase64: mockAadhaarPhoto,
-      rawAadhaarStored: false, // Strict compliance guarantee
+      rawAadhaarStored: false,
     }
 
     tx.result = result
@@ -245,117 +243,7 @@ export class MockIdentityProvider implements IdentityProvider {
   }
 }
 
-// -------------------------------------------------------------
-// 2. Surepass Real Provider Skeleton (DigiLocker / Aadhaar OTP API)
-// Plug in SUREPASS_API_TOKEN in .env
-// -------------------------------------------------------------
-export class SurepassIdentityProvider implements IdentityProvider {
-  name = 'SurepassIdentityProvider'
-  private token: string
-  private baseUrl = 'https://kyc-api.surepass.io/api/v1'
-
-  constructor(token?: string) {
-    this.token = token || process.env.SUREPASS_API_TOKEN || ''
-  }
-
-  async startAadhaarVerification(params: {
-    workerCode: string
-    aadhaarNumber: string
-    consentGiven: boolean
-    consentTimestamp: string
-  }): Promise<{ transactionId: string; status: string; message: string }> {
-    if (!this.token) throw new Error('SUREPASS_API_TOKEN not configured.')
-    
-    const response = await fetch(`${this.baseUrl}/aadhaar-v2/generate-otp`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        id_number: params.aadhaarNumber.replace(/\D/g, ''),
-      }),
-    })
-
-    const data = await response.json() as { data?: { client_id?: string; otp_sent?: boolean }; message?: string }
-    if (!response.ok || !data.data?.client_id) {
-      throw new Error(data.message || 'Failed to initiate Surepass Aadhaar verification.')
-    }
-
-    return {
-      transactionId: data.data.client_id,
-      status: 'OTP_SENT',
-      message: 'Aadhaar OTP sent to UIDAI registered mobile number.',
-    }
-  }
-
-  async verifyAadhaarOtp(params: { transactionId: string; otp: string }): Promise<AadhaarVerificationResult> {
-    if (!this.token) throw new Error('SUREPASS_API_TOKEN not configured.')
-
-    const response = await fetch(`${this.baseUrl}/aadhaar-v2/submit-otp`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: params.transactionId,
-        otp: params.otp,
-      }),
-    })
-
-    const json = await response.json() as {
-      data?: {
-        full_name?: string
-        dob?: string
-        gender?: string
-        aadhaar_number?: string
-        profile_image?: string
-        client_id?: string
-      }
-      message?: string
-    }
-
-    if (!response.ok || !json.data) {
-      throw new Error(json.message || 'Invalid Aadhaar OTP.')
-    }
-
-    const d = json.data
-    const lastFour = (d.aadhaar_number || '0000').slice(-4)
-    const saltSecret = process.env.AADHAAR_SALT_SECRET || 'catercrew_aadhaar_ref_salt_2026'
-    const saltedHashRef = crypto
-      .createHmac('sha256', saltSecret)
-      .update(d.client_id || params.transactionId)
-      .digest('hex')
-
-    const dob = d.dob || '2000-01-01'
-    const calculatedAge = calculateAge(dob)
-
-    return {
-      success: true,
-      transactionId: params.transactionId,
-      providerRefId: d.client_id || params.transactionId,
-      maskedAadhaar: `XXXXXXXX${lastFour}`,
-      lastFourDigits: lastFour,
-      verifiedName: d.full_name || '',
-      dob,
-      calculatedAge,
-      gender: d.gender === 'F' ? 'F' : 'M',
-      saltedHashRef,
-      photoBase64: d.profile_image,
-      rawAadhaarStored: false,
-    }
-  }
-
-  async fetchResult(transactionId: string): Promise<AadhaarVerificationResult> {
-    throw new Error(`fetchResult not required for synchronous OTP verification (tx: ${transactionId})`)
-  }
-}
-
 export function createIdentityProvider(): IdentityProvider {
-  if (process.env.SUREPASS_API_TOKEN) {
-    return new SurepassIdentityProvider()
-  }
   return new MockIdentityProvider()
 }
 
