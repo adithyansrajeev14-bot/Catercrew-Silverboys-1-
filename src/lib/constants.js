@@ -81,3 +81,6 @@ export const SUPABASE_PROJECT_REF = 'euamrlqdpkzpnrhftjro'
 export const SUPABASE_OAUTH_CALLBACK_URL =
   'https://euamrlqdpkzpnrhftjro.supabase.co/auth/v1/callback'
 
+export const COMMUNITY_WHATSAPP_LINK =
+  'https://chat.whatsapp.com/I8n9JZ1JhNnLdT7VhziOGX?s=cl&p=i&mlu=4&ilr=4&iam=2'
+

@@ -11,10 +11,12 @@ import {
   ExternalLink,
   User,
   Sparkles,
+  MessageCircle,
+  Users,
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured, getPhotoPublicUrl } from '../lib/supabase'
 import { generateCertificate } from '../lib/certificate'
-import { TIERS, STATUS_CONFIG } from '../lib/constants'
+import { TIERS, STATUS_CONFIG, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 
 export default function Status() {
   const { id: paramId } = useParams()
@@ -314,8 +316,34 @@ export default function Status() {
 
           {/* ACTIONS WHEN VERIFIED */}
           {worker.status === 'verified' && (
-            <div className="space-y-3 pt-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500">
+            <div className="space-y-4 pt-2">
+              {/* JOIN COMMUNITY CARD */}
+              <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 border-2 border-emerald-400 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-md">
+                    <Users className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Official Silver Boys Community</span>
+                  </div>
+                  <h4 className="text-base sm:text-lg font-black text-gray-900">
+                    Join CaterCrew Community
+                  </h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Get instant event gig alerts, coordinate with event coordinators, and connect with fellow verified staff across Kerala.
+                  </p>
+                </div>
+                <a
+                  href={COMMUNITY_WHATSAPP_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:bg-[#1caa4f] text-white font-black py-3.5 px-6 rounded-xl text-sm sm:text-base shadow-sm hover:shadow-md transition-all cursor-pointer"
+                >
+                  <MessageCircle className="w-5 h-5 fill-current" />
+                  <span>Join Community</span>
+                  <ExternalLink className="w-4 h-4 opacity-90" />
+                </a>
+              </div>
+
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 pt-1">
                 Staff Actions
               </h3>
 

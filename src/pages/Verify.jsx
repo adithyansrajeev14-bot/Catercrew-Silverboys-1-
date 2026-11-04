@@ -7,9 +7,10 @@ import {
   ShieldCheck,
   User,
   ExternalLink,
+  MessageCircle,
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured, getPhotoPublicUrl } from '../lib/supabase'
-import { TIERS } from '../lib/constants'
+import { TIERS, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 
 export default function Verify() {
   const { id } = useParams()
@@ -258,6 +259,26 @@ export default function Verify() {
           For privacy and data protection, personal phone numbers, home addresses, and government ID
           copies are restricted to event administrators.
         </p>
+
+        {/* Join Community Option for Verified Staff */}
+        {isVerified && (
+          <div className="mt-4 p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-left">
+            <div>
+              <p className="text-xs font-bold text-emerald-900">Official Staff Community</p>
+              <p className="text-[11px] text-emerald-700">Join fellow Silver Boys for event gig calls.</p>
+            </div>
+            <a
+              href={COMMUNITY_WHATSAPP_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#25D366] hover:bg-[#20ba59] active:bg-[#1caa4f] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <MessageCircle className="w-3.5 h-3.5 fill-current" />
+              <span>Join Community</span>
+              <ExternalLink className="w-3 h-3 opacity-90" />
+            </a>
+          </div>
+        )}
 
         {/* Action Link to Status */}
         <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">

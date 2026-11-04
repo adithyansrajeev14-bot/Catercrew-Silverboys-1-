@@ -18,7 +18,9 @@ import {
   ChevronRight,
   Globe,
   Share2,
+  MessageCircle,
 } from 'lucide-react'
+import { COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 
 // Malayalam & English Localization dictionary
 const I18N = {
@@ -988,10 +990,21 @@ export default function VerificationFlow() {
                   </div>
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <a
+                    href={COMMUNITY_WHATSAPP_LINK}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:bg-[#1caa4f] text-white font-bold py-4 px-8 rounded-2xl text-base shadow-sm hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <MessageCircle className="w-5 h-5 fill-current" />
+                    <span>Join Community</span>
+                    <ExternalLink className="w-4 h-4 opacity-90" />
+                  </a>
+
                   <Link
                     to={`/status/${workerCode}`}
-                    className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-base shadow-sm transition-all"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-base shadow-sm transition-all"
                   >
                     <span>{t.viewCertificate}</span>
                     <ArrowRight className="w-5 h-5" />

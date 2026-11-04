@@ -14,9 +14,10 @@ import {
   Sparkles,
   AlertOctagon,
   ExternalLink,
+  MessageCircle,
 } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB } from '../lib/constants'
+import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 import { compressImage } from '../lib/imageCompression'
 
 // Calculate 18 years ago limit for DOB picker
@@ -260,9 +261,8 @@ export default function Register() {
         }
       }
 
-      // 4. AUTOMATIC VERIFICATION: Register worker with status 'verified' and verified_at timestamp
-      const nowIso = new Date().toISOString()
-      const payload = {
+      // 4. Register worker with status 'pending' (satisfies DB RLS policy: status = 'pending', tier = 'silver', consent = true)
+      const basePayload = {
         p_full_name: enteredName,
         p_dob: formData.dob,
         p_height_cm: parseFloat(formData.heightCm),
@@ -272,7 +272,6 @@ export default function Register() {
         p_area: formData.area.trim(),
         p_travel_ok: Boolean(formData.travelOk),
         p_photo_path: photoFileName,
-        p_photo_thumb_path: thumbFileName,
         p_emergency_name: formData.emergencyName.trim(),
         p_emergency_phone: formData.emergencyPhone.trim(),
         p_consent: true,
@@ -283,8 +282,28 @@ export default function Register() {
         p_has_uniform: false,
       }
 
-      // Call register_worker security definer RPC
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('register_worker', payload)
+      let rpcData = null
+      let rpcErr = null
+
+      // First attempt: call register_worker with p_photo_thumb_path (migration_images.sql signature)
+      const payloadWithThumb = {
+        ...basePayload,
+        p_photo_thumb_path: thumbFileName,
+      }
+
+      const res1 = await supabase.rpc('register_worker', payloadWithThumb)
+      rpcData = res1.data
+      rpcErr = res1.error
+
+      // If failed due to function signature mismatch (e.g., standard 17-param schema before migration), try standard RPC
+      if (rpcErr && !rpcErr.message?.includes('DUPLICATE_REGISTRATION')) {
+        console.warn('RPC with thumb parameter error, retrying standard register_worker:', rpcErr.message)
+        const res2 = await supabase.rpc('register_worker', basePayload)
+        if (!res2.error) {
+          rpcData = res2.data
+          rpcErr = null
+        }
+      }
 
       if (rpcErr) {
         // If RPC raised a duplicate registration error
@@ -295,33 +314,44 @@ export default function Register() {
           return
         }
 
-        // Direct insert fallback with AUTOMATIC VERIFICATION and photo_thumb_path
-        console.warn('RPC register_worker error, trying direct insert with automatic verification:', rpcErr)
-        const { data: insertData, error: insertErr } = await supabase
+        // Direct insert fallback: strictly uses status: 'pending', tier: 'silver', consent: true to satisfy RLS
+        console.warn('RPC register_worker failed, attempting direct insert:', rpcErr.message)
+        let insertRecord = {
+          full_name: basePayload.p_full_name,
+          dob: basePayload.p_dob,
+          height_cm: basePayload.p_height_cm,
+          phone: basePayload.p_phone,
+          whatsapp: basePayload.p_whatsapp,
+          district: basePayload.p_district,
+          area: basePayload.p_area,
+          travel_ok: basePayload.p_travel_ok,
+          photo_path: basePayload.p_photo_path,
+          photo_thumb_path: thumbFileName || null,
+          experience_years: basePayload.p_experience_years,
+          emergency_name: basePayload.p_emergency_name,
+          emergency_phone: basePayload.p_emergency_phone,
+          consent: true,
+          tier: 'silver',
+          status: 'pending', // REQUIRED: Matches RLS check constraint
+        }
+
+        let { data: insertData, error: insertErr } = await supabase
           .from('workers')
-          .insert([
-            {
-              full_name: payload.p_full_name,
-              dob: payload.p_dob,
-              height_cm: payload.p_height_cm,
-              phone: payload.p_phone,
-              whatsapp: payload.p_whatsapp,
-              district: payload.p_district,
-              area: payload.p_area,
-              travel_ok: payload.p_travel_ok,
-              photo_path: payload.p_photo_path,
-              photo_thumb_path: thumbFileName,
-              experience_years: payload.p_experience_years,
-              emergency_name: payload.p_emergency_name,
-              emergency_phone: payload.p_emergency_phone,
-              consent: true,
-              tier: 'silver',
-              status: 'verified', // AUTOMATICALLY VERIFIED
-              verified_at: nowIso,
-            },
-          ])
-          .select('id, worker_code, status, tier, verified_at, photo_path, photo_thumb_path')
+          .insert([insertRecord])
+          .select('id, worker_code, status, tier, photo_path, photo_thumb_path')
           .single()
+
+        // If photo_thumb_path column does not exist yet in workers table, retry without it
+        if (insertErr && insertErr.message && (insertErr.message.includes('photo_thumb_path') || insertErr.message.includes('column'))) {
+          delete insertRecord.photo_thumb_path
+          const retry = await supabase
+            .from('workers')
+            .insert([insertRecord])
+            .select('id, worker_code, status, tier, photo_path')
+            .single()
+          insertData = retry.data
+          insertErr = retry.error
+        }
 
         if (insertErr) {
           throw new Error(insertErr.message || rpcErr.message)
@@ -329,12 +359,14 @@ export default function Register() {
 
         setRegisteredWorker({
           ...insertData,
-          status: 'verified',
-          tier: 'silver',
+          status: insertData.status || 'pending',
+          tier: insertData.tier || 'silver',
+          photo_path: photoFileName,
+          photo_thumb_path: thumbFileName,
         })
       } else {
-        // Ensure photo_thumb_path is updated in case existing RPC didn't store it yet
-        if (rpcData?.id) {
+        // Ensure photo_thumb_path is saved if rpcData succeeded
+        if (rpcData?.id && thumbFileName) {
           supabase
             .from('workers')
             .update({ photo_thumb_path: thumbFileName })
@@ -347,8 +379,8 @@ export default function Register() {
           ...rpcData,
           photo_path: photoFileName,
           photo_thumb_path: thumbFileName,
-          status: 'verified',
-          tier: 'silver',
+          status: rpcData.status || 'pending',
+          tier: rpcData.tier || 'silver',
         })
       }
     } catch (err) {
@@ -393,8 +425,14 @@ export default function Register() {
             <span className="text-xs font-bold text-emerald-800 tracking-wider uppercase">
               Official Worker ID Card
             </span>
-            <span className="text-[11px] font-bold bg-emerald-600 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              Verified ✓
+            <span
+              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                registeredWorker.status === 'verified'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-amber-100 text-amber-900 border border-amber-300'
+              }`}
+            >
+              {registeredWorker.status === 'verified' ? 'Verified ✓' : 'Submitted (Pending Review)'}
             </span>
           </div>
 
@@ -422,17 +460,36 @@ export default function Register() {
           <div className="pt-2 text-xs text-emerald-900 space-y-1">
             <p className="font-semibold">✓ Registered Name: {formData.fullName.trim()}</p>
             <p>✓ Tier: Silver Boy (Eligible for catering bookings across Kerala)</p>
-            <p>✓ Digital Certificate & tamper-proof QR code are ready for download.</p>
+            <p>
+              {registeredWorker.status === 'verified'
+                ? '✓ Digital Certificate & tamper-proof QR code are ready for download.'
+                : '✓ Registration submitted. Your profile and photo are under review by the CaterCrew team.'}
+            </p>
           </div>
         </div>
 
         {/* Navigation Action Buttons */}
         <div className="mt-8 flex flex-col gap-3">
+          <a
+            href={COMMUNITY_WHATSAPP_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2.5 bg-[#25D366] hover:bg-[#20ba59] active:bg-[#1caa4f] text-white font-extrabold py-4 px-6 rounded-2xl text-base sm:text-lg shadow-sm hover:shadow-md transition-all cursor-pointer"
+          >
+            <MessageCircle className="w-5 h-5 fill-current" />
+            <span>Join Community</span>
+            <ExternalLink className="w-4 h-4 opacity-90" />
+          </a>
+
           <Link
             to={`/status/${registeredWorker.worker_code}`}
             className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-4 px-6 rounded-2xl text-base sm:text-lg shadow-sm transition-colors cursor-pointer"
           >
-            <span>View My ID & Download Certificate</span>
+            <span>
+              {registeredWorker.status === 'verified'
+                ? 'View My ID & Download Certificate'
+                : 'Track Status & Certificate'}
+            </span>
             <ArrowRight className="w-5 h-5" />
           </Link>
 
