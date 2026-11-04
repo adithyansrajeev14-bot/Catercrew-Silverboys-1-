@@ -118,8 +118,8 @@ export default function VerificationFlow() {
   const [worker, setWorker] = useState(null)
   const [loadingWorker, setLoadingWorker] = useState(true)
 
-  // Current Step: 1 (Phone OTP) -> 2 (Aadhaar) -> 3 (Live Selfie) -> 4 (Result Decision)
-  const [currentStep, setCurrentStep] = useState(1)
+  // Current Step: 3 (Live Selfie & Anti-Duplicate Scan) -> 4 (Result Decision)
+  const [currentStep, setCurrentStep] = useState(3)
 
   // Step 1: Phone OTP State
   const [phone, setPhone] = useState('')
@@ -519,66 +519,71 @@ export default function VerificationFlow() {
           </div>
         )}
 
+        {/* Fast-Track Auto-Verification Banner */}
+        <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-emerald-900 flex items-start gap-3 shadow-xs">
+          <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="text-xs sm:text-sm">
+            <strong className="block font-bold text-emerald-950">Instant Automated Verification Active</strong>
+            <span>Take a quick live selfie with your front camera to confirm human presence. Our engine will verify you are not a duplicate registration and automatically approve your Silver Boy certificate!</span>
+          </div>
+        </div>
+
         {/* 3-Step Visual Progress Stepper */}
         <div className="mb-8">
           <div className="grid grid-cols-3 gap-2">
-            {/* Step 1 */}
-            <div
-              className={`p-3 rounded-2xl border text-center transition-all ${
-                currentStep === 1
+            {/* Step 1: Live Selfie */}
+            <button
+              type="button"
+              onClick={() => setCurrentStep(3)}
+              className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                currentStep === 3
                   ? 'bg-emerald-50 border-emerald-600 text-emerald-900 ring-2 ring-emerald-500/20'
-                  : currentStep > 1
+                  : currentStep > 3
                   ? 'bg-white border-emerald-300 text-emerald-700'
                   : 'bg-white border-gray-200 text-gray-400'
               }`}
             >
               <div className="flex items-center justify-center gap-1 mb-1 font-bold text-xs">
-                {currentStep > 1 ? (
+                {currentStep > 3 ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 ) : (
-                  <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-bold">
-                    1
-                  </span>
+                  <Camera className="w-4 h-4 text-emerald-600" />
                 )}
-                <span>Phone OTP</span>
+                <span>1. Live Selfie</span>
               </div>
-            </div>
+            </button>
 
-            {/* Step 2 */}
+            {/* Step 2: Anti-Duplicate Scan */}
             <div
               className={`p-3 rounded-2xl border text-center transition-all ${
-                currentStep === 2
-                  ? 'bg-emerald-50 border-emerald-600 text-emerald-900 ring-2 ring-emerald-500/20'
-                  : currentStep > 2
+                capturing || faceLoading
+                  ? 'bg-amber-50 border-amber-400 text-amber-900 ring-2 ring-amber-400/20'
+                  : currentStep === 4
                   ? 'bg-white border-emerald-300 text-emerald-700'
                   : 'bg-white border-gray-200 text-gray-400'
               }`}
             >
               <div className="flex items-center justify-center gap-1 mb-1 font-bold text-xs">
-                {currentStep > 2 ? (
+                {currentStep === 4 ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 ) : (
-                  <span className="w-4 h-4 rounded-full bg-gray-400 text-white text-[10px] flex items-center justify-center font-bold">
-                    2
-                  </span>
+                  <ShieldCheck className="w-4 h-4 text-gray-400" />
                 )}
-                <span>Aadhaar</span>
+                <span>2. Duplicate Scan</span>
               </div>
             </div>
 
-            {/* Step 3 */}
+            {/* Step 3: Verified Result */}
             <div
               className={`p-3 rounded-2xl border text-center transition-all ${
-                currentStep >= 3
-                  ? 'bg-emerald-50 border-emerald-600 text-emerald-900 ring-2 ring-emerald-500/20'
+                currentStep === 4
+                  ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white border-gray-200 text-gray-400'
               }`}
             >
               <div className="flex items-center justify-center gap-1 mb-1 font-bold text-xs">
-                <span className="w-4 h-4 rounded-full bg-gray-400 text-white text-[10px] flex items-center justify-center font-bold">
-                  3
-                </span>
-                <span>Selfie Match</span>
+                <CheckCircle2 className="w-4 h-4" />
+                <span>3. Auto-Verified</span>
               </div>
             </div>
           </div>

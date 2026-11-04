@@ -299,16 +299,16 @@ export default function Status() {
             <div className="p-5 rounded-2xl bg-white border-2 border-emerald-500 shadow-sm space-y-3">
               <div className="flex items-center gap-2 text-emerald-800 font-bold text-base">
                 <Sparkles className="w-5 h-5 text-emerald-600" />
-                <span>Fast-Track Automated Verification</span>
+                <span>Instant Auto-Verification (Live Selfie)</span>
               </div>
               <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                Skip manual review queues! Complete our quick 3-step automated verification (Phone OTP, DigiLocker Aadhaar, and Live Selfie) in under 2 minutes to unlock your official certificate immediately.
+                Take a quick live selfie with your front camera to confirm human presence and ensure no duplicate registration. Your profile will be automatically verified immediately!
               </p>
               <Link
                 to={`/verify-flow?code=${encodeURIComponent(worker.worker_code)}`}
                 className="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl text-sm transition-colors shadow-xs"
               >
-                <span>Start Automated Verification (3 Steps)</span>
+                <span>Verify Now with Live Selfie (Instant)</span>
                 <ExternalLink className="w-4 h-4" />
               </Link>
             </div>
