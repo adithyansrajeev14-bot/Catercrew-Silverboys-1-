@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import { VERIFICATION_CONFIG } from '../../config/verificationConfig'
+import { VERIFICATION_CONFIG } from '../../config/verificationConfig.ts'
 
 export interface FaceMatchResult {
   matchScore: number // 0 to 100

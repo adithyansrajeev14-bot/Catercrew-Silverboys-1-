@@ -18,7 +18,7 @@ import {
   Download,
   RotateCcw,
 } from 'lucide-react'
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { supabase, supabaseAnon, isSupabaseConfigured } from '../lib/supabase'
 import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 import { compressImage } from '../lib/imageCompression'
 import { generateCertificate } from '../lib/certificate'
@@ -148,7 +148,7 @@ export default function Register() {
       })
     } catch (err) {
       console.error('Certificate generation error:', err)
-      alert('Could not download certificate: ' + (err.message || 'Unknown error'))
+      setErrorMsg('Could not download certificate: ' + (err.message || 'Unknown error'))
     } finally {
       setDownloadingPdf(false)
     }
@@ -261,7 +261,22 @@ export default function Register() {
     }
 
     setErrors(errs)
-    return Object.keys(errs).length === 0
+    return { isValid: Object.keys(errs).length === 0, errs }
+  }
+
+  const generateUniqueWorkerCode = async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const randomSixDigits = String(Math.floor(100000 + Math.random() * 900000))
+      const candidate = `CC-SLV-${randomSixDigits}`
+      try {
+        const { data: existing } = await supabaseAnon.rpc('get_public_worker', { code: candidate })
+        const exists = Array.isArray(existing) ? existing.length > 0 : Boolean(existing?.worker_code)
+        if (!exists) return candidate
+      } catch {
+        return candidate
+      }
+    }
+    return `CC-SLV-${Date.now().toString().slice(-6)}`
   }
 
   const handleSubmit = async (e) => {
@@ -269,8 +284,9 @@ export default function Register() {
     setErrorMsg('')
     setDuplicateWorker(null)
 
-    if (!validate()) {
-      const firstError = Object.values(errors)[0]
+    const { isValid, errs } = validate()
+    if (!isValid) {
+      const firstError = Object.values(errs)[0]
       setErrorMsg(firstError || 'Please fix the errors marked in the form.')
       window.scrollTo({ top: 100, behavior: 'smooth' })
       return
@@ -330,7 +346,7 @@ export default function Register() {
       const photoFileName = `${uniqueId}_600.${ext}`
       const thumbFileName = `${uniqueId}_160_thumb.${ext}`
 
-      const { error: photoUploadErr } = await supabase.storage
+      let { error: photoUploadErr } = await supabase.storage
         .from('photos')
         .upload(photoFileName, photoFile, {
           cacheControl: '31536000',
@@ -339,11 +355,22 @@ export default function Register() {
         })
 
       if (photoUploadErr) {
+        const anonUpload = await supabaseAnon.storage
+          .from('photos')
+          .upload(photoFileName, photoFile, {
+            cacheControl: '31536000',
+            upsert: false,
+            contentType: photoFile.type || 'image/webp',
+          })
+        photoUploadErr = anonUpload.error
+      }
+
+      if (photoUploadErr) {
         throw new Error(`Photo upload failed: ${photoUploadErr.message}`)
       }
 
       if (thumbBlob) {
-        const { error: thumbUploadErr } = await supabase.storage
+        const { error: thumbUploadErr } = await supabaseAnon.storage
           .from('photos')
           .upload(thumbFileName, thumbBlob, {
             cacheControl: '31536000',
@@ -380,23 +407,22 @@ export default function Register() {
       let rpcData = null
       let rpcErr = null
 
-      // First attempt: call register_worker with p_photo_thumb_path (migration_images.sql signature)
-      const payloadWithThumb = {
-        ...basePayload,
-        p_photo_thumb_path: thumbFileName,
-      }
-
-      const res1 = await supabase.rpc('register_worker', payloadWithThumb)
+      // Primary attempt: standard 17-param register_worker RPC
+      const res1 = await supabaseAnon.rpc('register_worker', basePayload)
       rpcData = res1.data
       rpcErr = res1.error
 
-      // If failed due to function signature mismatch (e.g., standard 17-param schema before migration), try standard RPC
-      if (rpcErr && !rpcErr.message?.includes('DUPLICATE_REGISTRATION')) {
-        console.warn('RPC with thumb parameter error, retrying standard register_worker:', rpcErr.message)
-        const res2 = await supabase.rpc('register_worker', basePayload)
+      // Secondary attempt: 18-param register_worker RPC (with p_photo_thumb_path) if signature requires it
+      if (rpcErr && rpcErr.code === 'PGRST202') {
+        const res2 = await supabaseAnon.rpc('register_worker', {
+          ...basePayload,
+          p_photo_thumb_path: thumbFileName,
+        })
         if (!res2.error) {
           rpcData = res2.data
           rpcErr = null
+        } else {
+          rpcErr = res2.error
         }
       }
 
@@ -409,9 +435,16 @@ export default function Register() {
           return
         }
 
-        // Direct insert fallback: strictly uses status: 'pending', tier: 'silver', consent: true to satisfy RLS
-        console.warn('RPC register_worker failed, attempting direct insert:', rpcErr.message)
-        let insertRecord = {
+        // Direct insert fallback (e.g. when 16-17 yr applicant hits older 18+ RPC check on DB):
+        // IMPORTANT: Do NOT chain .select() onto .insert()!
+        // Chaining .select() sends Prefer: return=representation, which triggers a SELECT RLS violation
+        // ("new row violates row-level security policy for table workers") for anon/unlinked users.
+        // Instead, pre-generate a unique CC-SLV worker_code (preserved by generate_worker_code trigger)
+        // and insert with default Prefer: return=minimal via supabaseAnon.
+        console.warn('RPC register_worker fallback to minimal insert:', rpcErr.message)
+        let generatedCode = await generateUniqueWorkerCode()
+        const insertRecord = {
+          worker_code: generatedCode,
           full_name: basePayload.p_full_name,
           dob: basePayload.p_dob,
           height_cm: basePayload.p_height_cm,
@@ -427,33 +460,46 @@ export default function Register() {
           emergency_phone: basePayload.p_emergency_phone,
           consent: true,
           tier: 'silver',
-          status: 'pending', // REQUIRED: Matches RLS check constraint
+          status: 'pending', // REQUIRED: Matches RLS WITH CHECK (status = 'pending' and tier = 'silver' and consent = true)
         }
 
-        let { data: insertData, error: insertErr } = await supabase
+        let { error: insertErr } = await supabaseAnon
           .from('workers')
           .insert([insertRecord])
-          .select('id, worker_code, status, tier, photo_path, photo_thumb_path')
-          .single()
 
-        // If photo_thumb_path column does not exist yet in workers table, retry without it
-        if (insertErr && insertErr.message && (insertErr.message.includes('photo_thumb_path') || insertErr.message.includes('column'))) {
+        // If photo_thumb_path column does not exist in workers table, retry without it
+        if (
+          insertErr &&
+          insertErr.message &&
+          (insertErr.message.includes('photo_thumb_path') || insertErr.message.includes('column'))
+        ) {
           delete insertRecord.photo_thumb_path
-          const retry = await supabase
-            .from('workers')
-            .insert([insertRecord])
-            .select('id, worker_code, status, tier, photo_path')
-            .single()
-          insertData = retry.data
+          const retry = await supabaseAnon.from('workers').insert([insertRecord])
           insertErr = retry.error
+        }
+
+        // Handle rare worker_code collision (23505)
+        if (insertErr && insertErr.code === '23505' && insertErr.message?.includes('worker_code')) {
+          generatedCode = await generateUniqueWorkerCode()
+          insertRecord.worker_code = generatedCode
+          const retryCode = await supabaseAnon.from('workers').insert([insertRecord])
+          insertErr = retryCode.error
         }
 
         if (insertErr) {
           throw new Error(insertErr.message || rpcErr.message)
         }
 
-        const savedWorker = insertData || {}
-        const savedCode = savedWorker.worker_code
+        // Verify public worker record via security definer RPC
+        let publicWorker = null
+        try {
+          const { data: pubData } = await supabaseAnon.rpc('get_public_worker', { code: generatedCode })
+          publicWorker = Array.isArray(pubData) ? pubData[0] : pubData
+        } catch {
+          // Ignore lookup warning
+        }
+
+        const savedCode = publicWorker?.worker_code || generatedCode
 
         // Auto-verify new worker immediately if non-duplicate
         let finalStatus = 'verified'
@@ -470,7 +516,7 @@ export default function Register() {
                 fullName: enteredName,
               }),
             })
-            if (autoRes.ok) {
+            if (autoRes.ok && autoRes.headers.get('content-type')?.includes('application/json')) {
               const autoData = await autoRes.json()
               if (autoData.success) {
                 finalStatus = 'verified'
@@ -480,42 +526,19 @@ export default function Register() {
           } catch (autoErr) {
             console.warn('Auto-verify call warning:', autoErr)
           }
-
-          try {
-            await supabase
-              .from('workers')
-              .update({
-                status: 'verified',
-                verified_at: verifiedAt,
-                verification_route: 'GREEN',
-              })
-              .eq('worker_code', savedCode)
-          } catch {
-            // Handled
-          }
         }
 
         setRegisteredWorker({
-          ...savedWorker,
+          ...(publicWorker || {}),
           worker_code: savedCode,
           status: finalStatus,
           verified_at: verifiedAt,
-          tier: savedWorker.tier || 'silver',
+          tier: publicWorker?.tier || 'silver',
           full_name: enteredName,
           photo_path: photoFileName,
           photo_thumb_path: thumbFileName,
         })
       } else {
-        // Ensure photo_thumb_path is saved if rpcData succeeded
-        if (rpcData?.id && thumbFileName) {
-          supabase
-            .from('workers')
-            .update({ photo_thumb_path: thumbFileName })
-            .eq('id', rpcData.id)
-            .then(() => {})
-            .catch(() => {})
-        }
-
         const savedCode = rpcData?.worker_code
         let finalStatus = 'verified'
         let verifiedAt = new Date().toISOString()
@@ -531,7 +554,7 @@ export default function Register() {
                 fullName: enteredName,
               }),
             })
-            if (autoRes.ok) {
+            if (autoRes.ok && autoRes.headers.get('content-type')?.includes('application/json')) {
               const autoData = await autoRes.json()
               if (autoData.success) {
                 finalStatus = 'verified'
@@ -540,19 +563,6 @@ export default function Register() {
             }
           } catch (autoErr) {
             console.warn('Auto-verify call warning:', autoErr)
-          }
-
-          try {
-            await supabase
-              .from('workers')
-              .update({
-                status: 'verified',
-                verified_at: verifiedAt,
-                verification_route: 'GREEN',
-              })
-              .eq('worker_code', savedCode)
-          } catch {
-            // Handled
           }
         }
 
@@ -564,7 +574,7 @@ export default function Register() {
           photo_thumb_path: thumbFileName,
           status: finalStatus,
           verified_at: verifiedAt,
-          tier: rpcData.tier || 'silver',
+          tier: rpcData?.tier || 'silver',
         })
       }
     } catch (err) {

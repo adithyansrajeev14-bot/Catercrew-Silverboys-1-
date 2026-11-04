@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { VERIFICATION_CONFIG } from '../../config/verificationConfig'
+import { VERIFICATION_CONFIG } from '../../config/verificationConfig.ts'
 
 export interface SmsProvider {
   name: string

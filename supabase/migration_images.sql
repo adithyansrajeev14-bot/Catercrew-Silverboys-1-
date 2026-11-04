@@ -10,7 +10,21 @@ alter table public.workers add column if not exists photo_thumb_path text;
 -- 2. Index for quick lookups
 create index if not exists idx_workers_photo_thumb_path on public.workers(photo_thumb_path);
 
--- 3. Update register_worker function to accept optional p_photo_thumb_path parameter
+-- 3. Ensure public insert RLS policy allows both anon and authenticated roles
+drop policy if exists "Public can submit silver worker registration" on public.workers;
+create policy "Public can submit silver worker registration"
+on public.workers
+for insert
+to anon, authenticated
+with check (
+  status = 'pending' and tier = 'silver' and consent = true
+);
+
+-- 4. Drop older 17-parameter overload before replacing register_worker with 16+ age rule & optional p_photo_thumb_path
+drop function if exists public.register_worker(
+  text, date, numeric, text, text, text, text, boolean, text, text, text, boolean, numeric, text, numeric, text[], boolean
+);
+
 create or replace function public.register_worker(
   p_full_name text,
   p_dob date,
@@ -100,3 +114,5 @@ begin
   );
 end;
 $$;
+
+grant execute on function public.register_worker to anon, authenticated;

@@ -1,15 +1,14 @@
-import express, { Request, Response } from 'express'
+import express, { type Request, type Response } from 'express'
 import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
 import { createServer as createViteServer } from 'vite'
 import { createClient } from '@supabase/supabase-js'
 
-import { VERIFICATION_CONFIG } from './server/config/verificationConfig'
-import { otpManager } from './server/services/sms/smsAdapter'
-import { identityProvider } from './server/services/identity/identityAdapter'
-import { faceProvider } from './server/services/face/faceAdapter'
-import { evaluateVerification } from './server/services/verificationEngine'
+import { otpManager } from './server/services/sms/smsAdapter.ts'
+import { identityProvider } from './server/services/identity/identityAdapter.ts'
+import { faceProvider } from './server/services/face/faceAdapter.ts'
+import { evaluateVerification } from './server/services/verificationEngine.ts'
 
 // Read env variables
 const PORT = Number(process.env.PORT) || 3000
@@ -82,8 +81,8 @@ const verificationAudits: Array<{
 // 1. Get Worker Details for Verification
 app.get('/api/verify/worker/:code', async (req: Request, res: Response) => {
   try {
-    const { code } = req.params
-    const cleanCode = (code || '').toUpperCase()
+    const rawCode = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code
+    const cleanCode = (rawCode || '').toUpperCase()
 
     // Test code instant fallback
     if (cleanCode.startsWith('CC-SLV-')) {
@@ -396,7 +395,7 @@ app.post('/api/verify/finalize', async (req: Request, res: Response) => {
 
     // Record decision in database (if table exists)
     try {
-      await safeDbQuery(
+      const { error: extUpdateErr } = await safeDbQuery(
         supabase.from('workers').update({
           status: decision.recommendedStatus,
           verification_route: decision.route,
@@ -411,6 +410,14 @@ app.post('/api/verify/finalize', async (req: Request, res: Response) => {
           verified_at: decision.recommendedStatus === 'verified' ? new Date().toISOString() : null,
         }).eq('worker_code', code)
       )
+      if (extUpdateErr) {
+        await safeDbQuery(
+          supabase.from('workers').update({
+            status: decision.recommendedStatus === 'rejected' ? 'suspended' : decision.recommendedStatus,
+            verified_at: decision.recommendedStatus === 'verified' ? new Date().toISOString() : null,
+          }).eq('worker_code', code)
+        )
+      }
     } catch {
       // In development fallback, graceful degradation
     }
@@ -493,7 +500,7 @@ app.post('/api/verify/auto-verify', async (req: Request, res: Response) => {
     ]
 
     try {
-      await safeDbQuery(
+      const { error: extAutoErr } = await safeDbQuery(
         supabase
           .from('workers')
           .update({
@@ -506,6 +513,17 @@ app.post('/api/verify/auto-verify', async (req: Request, res: Response) => {
           })
           .eq('worker_code', cleanCode)
       )
+      if (extAutoErr) {
+        await safeDbQuery(
+          supabase
+            .from('workers')
+            .update({
+              status: 'verified',
+              verified_at: verifiedTimestamp,
+            })
+            .eq('worker_code', cleanCode)
+        )
+      }
     } catch (dbErr: any) {
       console.warn('DB update warning during auto-verify:', dbErr.message)
     }
@@ -541,7 +559,8 @@ app.post('/api/verify/auto-verify', async (req: Request, res: Response) => {
 
 // 8. Serve Secure Selfie (Admin view with token validation)
 app.get('/api/verify/selfie-secure/:filename', (req: Request, res: Response) => {
-  const { filename } = req.params
+  const rawFilename = Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename
+  const filename = path.basename(rawFilename || '')
   const filePath = path.resolve(process.cwd(), '.private_storage/selfies', filename)
   if (!fs.existsSync(filePath)) {
     return res.status(404).send('Selfie image not found or expired.')
@@ -588,7 +607,7 @@ app.get('/api/admin/verification-summary', async (_req: Request, res: Response) 
 // Admin manual review action (Approve / Reject yellow cases)
 app.post('/api/admin/workers/:id/review', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
     const { action, reason, adminName } = req.body // action: 'approve' | 'reject'
 
     const newStatus = action === 'approve' ? 'verified' : 'rejected'
@@ -596,13 +615,21 @@ app.post('/api/admin/workers/:id/review', async (req: Request, res: Response) =>
 
     // Update in Supabase
     try {
-      await safeDbQuery(
+      const { error: reviewErr } = await safeDbQuery(
         supabase.from('workers').update({
           status: newStatus,
           verification_route: newRoute,
           verified_at: action === 'approve' ? new Date().toISOString() : null,
         }).eq('id', id)
       )
+      if (reviewErr) {
+        await safeDbQuery(
+          supabase.from('workers').update({
+            status: action === 'approve' ? 'verified' : 'suspended',
+            verified_at: action === 'approve' ? new Date().toISOString() : null,
+          }).eq('id', id)
+        )
+      }
     } catch {
       // In dev fallback
     }
@@ -633,7 +660,7 @@ app.post('/api/admin/workers/:id/review', async (req: Request, res: Response) =>
 // Admin Send Verification Link action (SMS/WhatsApp link generator)
 app.post('/api/admin/workers/:id/send-link', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
     let worker: any = null
     try {
       const { data } = await safeDbQuery(
@@ -687,7 +714,7 @@ async function startServer() {
     // Serve production static build
     const distPath = path.resolve(process.cwd(), 'dist')
     app.use(express.static(distPath))
-    app.get('*', (_req, res) => {
+    app.get('/{*splat}', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'))
     })
   }

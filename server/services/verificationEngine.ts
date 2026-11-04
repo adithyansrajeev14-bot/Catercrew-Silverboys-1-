@@ -1,5 +1,5 @@
-import { VERIFICATION_CONFIG } from '../config/verificationConfig'
-import { computeNameMatchScore } from './identity/identityAdapter'
+import { VERIFICATION_CONFIG } from '../config/verificationConfig.ts'
+import { computeNameMatchScore } from './identity/identityAdapter.ts'
 
 export interface WorkerVerificationInputs {
   workerCode: string

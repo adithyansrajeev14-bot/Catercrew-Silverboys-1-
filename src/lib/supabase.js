@@ -29,6 +29,14 @@ export const supabase = createClient(safeUrl, safeAnonKey, {
   },
 })
 
+export const supabaseAnon = createClient(safeUrl, safeAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+})
+
 /**
  * Helper to obtain the public URL of a worker photo from the 'photos' bucket
  */

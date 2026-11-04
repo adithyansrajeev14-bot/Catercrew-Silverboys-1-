@@ -1,7 +1,9 @@
 {
   "name": "CaterCrew - Event Catering Staff Platform",
   "description": "CaterCrew connects event management companies with verified catering staff across Kerala.",
-  "permissions": [],
+  "permissions": [
+    "camera"
+  ],
   "capabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
