@@ -1,19 +1,36 @@
 /**
  * Client-Side Image Compression & Optimization Utility
- * Prevents high Supabase egress by resizing and compressing photos before upload.
+ * Drastically reduces Supabase Storage Cached Egress by resizing and compressing
+ * photos and documents before upload.
  */
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_ORIGINAL_SIZE_MB = 15
-const MAX_ORIGINAL_BYTES = MAX_ORIGINAL_SIZE_MB * 1024 * 1024
-const TARGET_BYTES = 100 * 1024 // 100 KB
-const MAX_ALLOWED_BYTES = 500 * 1024 // 500 KB max limit
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_ORIGINAL_PHOTO_BYTES = 15 * 1024 * 1024 // 15 MB
+const TARGET_PHOTO_BYTES = 80 * 1024 // 80 KB target
+const MAX_DOC_PDF_BYTES = 2 * 1024 * 1024 // 2 MB limit for PDF docs
 
 /**
- * Loads a File/Blob into an image source, respecting EXIF orientation.
+ * Checks if the browser's canvas supports WebP export.
+ */
+let _supportsWebP = null
+export function isWebPSupported() {
+  if (_supportsWebP !== null) return _supportsWebP
+  if (typeof document === 'undefined') return false
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    _supportsWebP = canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0
+  } catch {
+    _supportsWebP = false
+  }
+  return _supportsWebP
+}
+
+/**
+ * Loads a File or Blob into an image element or bitmap, respecting EXIF orientation.
  */
 async function loadImageSource(file) {
-  // Try modern createImageBitmap with EXIF orientation first
   if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
     try {
       const bitmap = await window.createImageBitmap(file, {
@@ -28,11 +45,10 @@ async function loadImageSource(file) {
         },
       }
     } catch {
-      // Fallback to standard Image loading below
+      // Fall through to Image element
     }
   }
 
-  // Fallback to HTMLImageElement
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -46,24 +62,57 @@ async function loadImageSource(file) {
     }
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error('Failed to load image file. The image may be corrupted.'))
+      reject(new Error('Failed to load image file. The file may be corrupt or not a valid image.'))
     }
     img.src = url
   })
 }
 
 /**
- * Compresses an image File or Blob on the client.
- *
- * Rules:
- * 1. Allowed MIME types: image/jpeg, image/png, image/webp
- * 2. Max original size: 15 MB
- * 3. Resize to longest side max 600px (keeps aspect ratio)
- * 4. Output JPEG at quality 0.7, step down to 0.6, 0.5 to reach < 100 KB
- * 5. Also generates a 120px thumbnail (thumbBlob) for list views
+ * Calculate aspect-ratio preserved dimensions for a given max longest side.
+ */
+function calculateDimensions(origWidth, origHeight, maxSide) {
+  let targetWidth = origWidth
+  let targetHeight = origHeight
+
+  if (origWidth > maxSide || origHeight > maxSide) {
+    if (origWidth >= origHeight) {
+      targetWidth = maxSide
+      targetHeight = Math.round((origHeight * maxSide) / origWidth)
+    } else {
+      targetHeight = maxSide
+      targetWidth = Math.round((origWidth * maxSide) / origHeight)
+    }
+  }
+
+  return { width: Math.max(1, targetWidth), height: Math.max(1, targetHeight) }
+}
+
+/**
+ * Draws image source onto a canvas with background fill to avoid transparency artifacts.
+ */
+function drawToCanvas(source, width, height) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas 2D context is not available.')
+
+  // Clean white background for transparency in PNGs converted to WebP/JPEG
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, width, height)
+  ctx.drawImage(source, 0, 0, width, height)
+  return canvas
+}
+
+/**
+ * Compresses a profile photo:
+ * - Max 600 px longest side (keeps aspect ratio)
+ * - WebP (fallback JPEG), quality ~0.75
+ * - Target under 80 KB (progressive step-down to 0.65, 0.55, 0.45 if needed)
+ * - Generates a 160 px thumbnail version
  *
  * @param {File|Blob} file
- * @param {Object} options
  * @returns {Promise<{
  *   file: File,
  *   blob: Blob,
@@ -71,136 +120,172 @@ async function loadImageSource(file) {
  *   width: number,
  *   height: number,
  *   sizeBytes: number,
+ *   mimeType: string,
+ *   ext: string,
  *   thumbBlob: Blob,
  *   thumbFile: File,
+ *   thumbWidth: number,
+ *   thumbHeight: number,
+ *   thumbSizeBytes: number,
  *   qualityUsed: number
  * }>}
  */
-export async function compressImage(file, options = {}) {
+export async function compressImage(file) {
   if (!file) {
-    throw new Error('No photo file provided.')
+    throw new Error('Please select an image file.')
   }
 
-  // 1. Validate MIME type
-  const mimeType = file.type || ''
-  if (!ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase())) {
-    throw new Error('Only JPG, PNG, and WebP images are allowed.')
+  const mime = (file.type || '').toLowerCase()
+  if (!ALLOWED_IMAGE_TYPES.includes(mime)) {
+    throw new Error('Only JPG, PNG, and WebP images are supported.')
   }
 
-  // 2. Validate original size (max 15 MB)
-  if (file.size > MAX_ORIGINAL_BYTES) {
-    throw new Error(`Original photo is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed is ${MAX_ORIGINAL_SIZE_MB} MB.`)
+  if (file.size > MAX_ORIGINAL_PHOTO_BYTES) {
+    throw new Error(
+      `Photo file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Please choose a file smaller than 15 MB.`
+    )
   }
 
-  // 3. Load image source with EXIF orientation
-  const imgData = await loadImageSource(file)
-  const { source, width: origWidth, height: origHeight, close } = imgData
+  const { source, width: origWidth, height: origHeight, close } = await loadImageSource(file)
 
   try {
-    const maxSide = options.maxSide || 600
-    let targetWidth = origWidth
-    let targetHeight = origHeight
+    const useWebP = isWebPSupported()
+    const targetMime = useWebP ? 'image/webp' : 'image/jpeg'
+    const targetExt = useWebP ? 'webp' : 'jpg'
 
-    // Calculate aspect-ratio preserved dimensions
-    if (origWidth > maxSide || origHeight > maxSide) {
-      if (origWidth >= origHeight) {
-        targetWidth = maxSide
-        targetHeight = Math.round((origHeight * maxSide) / origWidth)
-      } else {
-        targetHeight = maxSide
-        targetWidth = Math.round((origWidth * maxSide) / origHeight)
-      }
-    }
+    // 1. Main 600px version
+    const { width: mainWidth, height: mainHeight } = calculateDimensions(origWidth, origHeight, 600)
+    const mainCanvas = drawToCanvas(source, mainWidth, mainHeight)
 
-    // Canvas for main compressed image
-    const canvas = document.createElement('canvas')
-    canvas.width = targetWidth
-    canvas.height = targetHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) {
-      throw new Error('Canvas 2D context not available.')
-    }
-
-    // Optional subtle white background for transparent PNGs
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, targetWidth, targetHeight)
-    ctx.drawImage(source, 0, 0, targetWidth, targetHeight)
-
-    // Progressive quality reduction (0.7 -> 0.6 -> 0.5) to hit < 100 KB
-    const qualities = [0.7, 0.6, 0.5]
+    // Quality steps to ensure < 80 KB
+    const qualitySteps = [0.75, 0.65, 0.55, 0.45]
     let chosenBlob = null
-    let chosenQuality = 0.7
+    let chosenQuality = 0.75
 
-    for (const q of qualities) {
-      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', q))
+    for (const q of qualitySteps) {
+      const blob = await new Promise((resolve) => mainCanvas.toBlob(resolve, targetMime, q))
       if (!blob) continue
       chosenBlob = blob
       chosenQuality = q
-      if (blob.size <= TARGET_BYTES) {
-        break // Reached under 100 KB target!
+      if (blob.size <= TARGET_PHOTO_BYTES) {
+        break
       }
     }
 
     if (!chosenBlob) {
-      throw new Error('Could not export compressed image from canvas.')
+      throw new Error('Failed to compress image.')
     }
 
-    // Reject if still over 500 KB after compression
-    if (chosenBlob.size > MAX_ALLOWED_BYTES) {
-      throw new Error(
-        `Compressed image is ${(chosenBlob.size / 1024).toFixed(0)} KB, which exceeds the 500 KB safety limit. Please upload a smaller photo.`
-      )
-    }
+    // 2. Thumbnail 160px version
+    const { width: thumbWidth, height: thumbHeight } = calculateDimensions(origWidth, origHeight, 160)
+    const thumbCanvas = drawToCanvas(source, thumbWidth, thumbHeight)
+    const thumbBlob = await new Promise((resolve) => thumbCanvas.toBlob(resolve, targetMime, 0.75))
 
-    // Generate 120px thumbnail
-    const thumbMaxSide = options.thumbMaxSide || 120
-    let thumbWidth = origWidth
-    let thumbHeight = origHeight
-    if (origWidth > thumbMaxSide || origHeight > thumbMaxSide) {
-      if (origWidth >= origHeight) {
-        thumbWidth = thumbMaxSide
-        thumbHeight = Math.round((origHeight * thumbMaxSide) / origWidth)
-      } else {
-        thumbHeight = thumbMaxSide
-        thumbWidth = Math.round((origWidth * thumbMaxSide) / origHeight)
-      }
-    }
-
-    const thumbCanvas = document.createElement('canvas')
-    thumbCanvas.width = thumbWidth
-    thumbCanvas.height = thumbHeight
-    const thumbCtx = thumbCanvas.getContext('2d')
-    thumbCtx.fillStyle = '#FFFFFF'
-    thumbCtx.fillRect(0, 0, thumbWidth, thumbHeight)
-    thumbCtx.drawImage(source, 0, 0, thumbWidth, thumbHeight)
-
-    const thumbBlob = await new Promise((res) => thumbCanvas.toBlob(res, 'image/jpeg', 0.7))
-
-    const originalName = file.name || 'photo.jpg'
+    const originalName = file.name || 'photo'
     const baseName = originalName.substring(0, originalName.lastIndexOf('.')) || 'photo'
-    const compressedFile = new File([chosenBlob], `${baseName}.jpg`, {
-      type: 'image/jpeg',
+
+    const mainFile = new File([chosenBlob], `${baseName}_600.${targetExt}`, {
+      type: targetMime,
       lastModified: Date.now(),
     })
-    const thumbFile = new File([thumbBlob || chosenBlob], `${baseName}_thumb.jpg`, {
-      type: 'image/jpeg',
+
+    const thumbFile = new File([thumbBlob || chosenBlob], `${baseName}_160_thumb.${targetExt}`, {
+      type: targetMime,
       lastModified: Date.now(),
     })
 
     const previewUrl = URL.createObjectURL(chosenBlob)
 
     return {
-      file: compressedFile,
+      file: mainFile,
       blob: chosenBlob,
       previewUrl,
-      width: targetWidth,
-      height: targetHeight,
+      width: mainWidth,
+      height: mainHeight,
       sizeBytes: chosenBlob.size,
+      mimeType: targetMime,
+      ext: targetExt,
       thumbBlob: thumbBlob || chosenBlob,
       thumbFile,
+      thumbWidth,
+      thumbHeight,
+      thumbSizeBytes: (thumbBlob || chosenBlob).size,
       qualityUsed: chosenQuality,
     }
   } finally {
     close()
   }
+}
+
+/**
+ * Compresses an ID Proof or Company Document:
+ * - If Image: resize to max 1200 px, quality 0.8, WebP (fallback JPEG)
+ * - If PDF: limit to 2 MB, otherwise throw a friendly error
+ *
+ * @param {File} file
+ * @returns {Promise<{
+ *   file: File,
+ *   isPdf: boolean,
+ *   sizeBytes: number,
+ *   previewUrl?: string,
+ *   ext: string
+ * }>}
+ */
+export async function compressDocument(file) {
+  if (!file) {
+    throw new Error('Please select a document or ID proof file.')
+  }
+
+  const mime = (file.type || '').toLowerCase()
+  const isPdf = mime === 'application/pdf' || (file.name && file.name.toLowerCase().endsWith('.pdf'))
+
+  // PDF handling
+  if (isPdf) {
+    if (file.size > MAX_DOC_PDF_BYTES) {
+      throw new Error(
+        `PDF document is ${(file.size / 1024 / 1024).toFixed(1)} MB. Please limit PDF files to 2 MB or upload a compressed version.`
+      )
+    }
+    return {
+      file,
+      isPdf: true,
+      sizeBytes: file.size,
+      ext: 'pdf',
+    }
+  }
+
+  // Image handling
+  if (ALLOWED_IMAGE_TYPES.includes(mime)) {
+    const { source, width: origWidth, height: origHeight, close } = await loadImageSource(file)
+    try {
+      const useWebP = isWebPSupported()
+      const targetMime = useWebP ? 'image/webp' : 'image/jpeg'
+      const targetExt = useWebP ? 'webp' : 'jpg'
+
+      const { width: docWidth, height: docHeight } = calculateDimensions(origWidth, origHeight, 1200)
+      const canvas = drawToCanvas(source, docWidth, docHeight)
+
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, targetMime, 0.8))
+      if (!blob) throw new Error('Failed to compress document image.')
+
+      const originalName = file.name || 'document'
+      const baseName = originalName.substring(0, originalName.lastIndexOf('.')) || 'document'
+      const compressedFile = new File([blob], `${baseName}_compressed.${targetExt}`, {
+        type: targetMime,
+        lastModified: Date.now(),
+      })
+
+      return {
+        file: compressedFile,
+        isPdf: false,
+        sizeBytes: blob.size,
+        previewUrl: URL.createObjectURL(blob),
+        ext: targetExt,
+      }
+    } finally {
+      close()
+    }
+  }
+
+  throw new Error('Unsupported format. Please upload a PDF under 2 MB or an image (JPG, PNG, WebP).')
 }

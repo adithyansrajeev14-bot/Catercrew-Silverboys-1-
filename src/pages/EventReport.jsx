@@ -854,10 +854,14 @@ export default function EventReport() {
                     <div className="flex items-center gap-3.5">
                       {/* Avatar / Photo */}
                       <div className="relative shrink-0">
-                        {w.photo_path ? (
+                        {(w.photo_thumb_path || w.photo_path) ? (
                           <img
-                            src={getPhotoPublicUrl(w.photo_path) || '/assets/aistudio/fevicon_18dfe662.png'}
+                            src={getPhotoPublicUrl(w.photo_thumb_path || w.photo_path) || '/assets/aistudio/fevicon_18dfe662.png'}
                             alt={w.full_name}
+                            width={48}
+                            height={48}
+                            loading="lazy"
+                            decoding="async"
                             className="w-12 h-12 rounded-2xl object-cover border border-gray-200 shadow-sm"
                           />
                         ) : (

@@ -2,18 +2,24 @@ import { jsPDF } from 'jspdf'
 import QRCode from 'qrcode'
 import { getPhotoPublicUrl } from './supabase'
 
+// In-memory cache for loaded certificate images (templates, worker photos)
+const certificateImageCache = new Map()
+
 /**
- * Load an image from URL into an HTMLImageElement
+ * Load an image from URL into an HTMLImageElement (memoized)
  */
 function loadImage(src) {
+  if (!src) return Promise.resolve(null)
+  if (certificateImageCache.has(src)) {
+    return Promise.resolve(certificateImageCache.get(src))
+  }
   return new Promise((resolve) => {
-    if (!src) {
-      resolve(null)
-      return
-    }
     const img = new Image()
     img.crossOrigin = 'Anonymous'
-    img.onload = () => resolve(img)
+    img.onload = () => {
+      certificateImageCache.set(src, img)
+      resolve(img)
+    }
     img.onerror = () => {
       console.warn('Failed to load image:', src)
       resolve(null)

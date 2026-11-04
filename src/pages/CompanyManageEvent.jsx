@@ -397,7 +397,7 @@ export default function CompanyManageEvent() {
         ) : (
           <div className="space-y-3">
             {bookedBoys.map((boy) => {
-              const photoUrl = getPhotoPublicUrl(boy.photo_path)
+              const photoUrl = getPhotoPublicUrl(boy.photo_thumb_path || boy.photo_path)
 
               return (
                 <div
@@ -410,6 +410,10 @@ export default function CompanyManageEvent() {
                       <img
                         src={photoUrl}
                         alt=""
+                        width={48}
+                        height={48}
+                        loading="lazy"
+                        decoding="async"
                         className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 bg-gray-100 shrink-0"
                       />
                     ) : (

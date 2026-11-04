@@ -1,0 +1,102 @@
+-- ==============================================================================
+-- CaterCrew Storage Egress Optimization Migration
+-- Adds photo_thumb_path to workers table and updates registration RPC
+-- Safe to re-run multiple times (idempotent)
+-- ==============================================================================
+
+-- 1. Add photo_thumb_path column to workers
+alter table public.workers add column if not exists photo_thumb_path text;
+
+-- 2. Index for quick lookups
+create index if not exists idx_workers_photo_thumb_path on public.workers(photo_thumb_path);
+
+-- 3. Update register_worker function to accept optional p_photo_thumb_path parameter
+create or replace function public.register_worker(
+  p_full_name text,
+  p_dob date,
+  p_height_cm numeric,
+  p_phone text,
+  p_whatsapp text,
+  p_district text,
+  p_area text,
+  p_travel_ok boolean,
+  p_photo_path text,
+  p_emergency_name text,
+  p_emergency_phone text,
+  p_consent boolean,
+  p_weight_kg numeric default null,
+  p_id_proof_path text default null,
+  p_experience_years numeric default 0,
+  p_roles text[] default '{}',
+  p_has_uniform boolean default false,
+  p_photo_thumb_path text default null
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_worker record;
+begin
+  if p_consent is not true then
+    raise exception 'Consent is required to submit registration.';
+  end if;
+
+  if p_dob > (current_date - interval '16 years') then
+    raise exception 'Registrant must be at least 16 years of age.';
+  end if;
+
+  insert into public.workers (
+    tier,
+    status,
+    full_name,
+    dob,
+    height_cm,
+    weight_kg,
+    phone,
+    whatsapp,
+    district,
+    area,
+    travel_ok,
+    photo_path,
+    photo_thumb_path,
+    id_proof_path,
+    experience_years,
+    roles,
+    has_uniform,
+    emergency_name,
+    emergency_phone,
+    consent
+  ) values (
+    'silver',
+    'pending',
+    trim(p_full_name),
+    p_dob,
+    p_height_cm,
+    p_weight_kg,
+    trim(p_phone),
+    trim(p_whatsapp),
+    trim(p_district),
+    trim(p_area),
+    coalesce(p_travel_ok, false),
+    trim(p_photo_path),
+    nullif(trim(p_photo_thumb_path), ''),
+    nullif(trim(p_id_proof_path), ''),
+    coalesce(p_experience_years, 0),
+    coalesce(p_roles, '{}'),
+    coalesce(p_has_uniform, false),
+    trim(p_emergency_name),
+    trim(p_emergency_phone),
+    true
+  )
+  returning * into v_worker;
+
+  return json_build_object(
+    'id', v_worker.id,
+    'worker_code', v_worker.worker_code,
+    'status', v_worker.status,
+    'tier', v_worker.tier
+  );
+end;
+$$;

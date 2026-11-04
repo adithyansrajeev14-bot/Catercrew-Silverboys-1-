@@ -58,6 +58,11 @@ export default function Admin() {
   // Dashboard state - ONLY actual data from database
   const [workers, setWorkers] = useState([])
   const [loadingWorkers, setLoadingWorkers] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [totalCount, setTotalCount] = useState(0)
+  const [statusCounts, setStatusCounts] = useState({ all: 0, pending: 0, verified: 0, suspended: 0 })
   const [fetchError, setFetchError] = useState('')
   const [activeTab, setActiveTab] = useState('all') // all, pending, verified, suspended
   const [searchQuery, setSearchQuery] = useState('')
@@ -123,28 +128,70 @@ export default function Admin() {
     }
   }, [])
 
-  const fetchWorkers = useCallback(async () => {
+  const PAGE_SIZE = 20
+
+  const fetchStatusCounts = useCallback(async () => {
+    if (!isSupabaseConfigured) return
+    try {
+      const [allRes, pendingRes, verifiedRes, suspendedRes] = await Promise.all([
+        supabase.from('workers').select('*', { count: 'exact', head: true }),
+        supabase.from('workers').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('workers').select('*', { count: 'exact', head: true }).eq('status', 'verified'),
+        supabase.from('workers').select('*', { count: 'exact', head: true }).eq('status', 'suspended'),
+      ])
+      setStatusCounts({
+        all: allRes.count ?? 0,
+        pending: pendingRes.count ?? 0,
+        verified: verifiedRes.count ?? 0,
+        suspended: suspendedRes.count ?? 0,
+      })
+    } catch (e) {
+      console.warn('Error fetching status counts:', e)
+    }
+  }, [])
+
+  const fetchWorkers = useCallback(async (pageNumber = 0, isAppend = false) => {
     if (!isSupabaseConfigured) {
       setWorkers([])
       setFetchError('Database credentials are not configured in .env.')
       return
     }
 
-    setLoadingWorkers(true)
+    if (isAppend) {
+      setLoadingMore(true)
+    } else {
+      setLoadingWorkers(true)
+    }
     setFetchError('')
     try {
-      const { data, error } = await supabase
+      const from = pageNumber * PAGE_SIZE
+      const to = from + PAGE_SIZE - 1
+
+      // Fetch only columns needed for the list to minimize egress
+      const { data, count, error } = await supabase
         .from('workers')
-        .select('*')
+        .select(
+          'id, worker_code, full_name, phone, whatsapp, district, area, height_cm, experience_years, tier, status, photo_thumb_path, photo_path, created_at, dob, travel_ok, emergency_name, emergency_phone, verified_at',
+          { count: 'exact' }
+        )
         .order('created_at', { ascending: false })
+        .range(from, to)
 
       if (error) throw error
-      setWorkers(data || [])
+
+      if (count !== null) {
+        setTotalCount(count)
+      }
+
+      setWorkers((prev) => (isAppend ? [...prev, ...(data || [])] : (data || [])))
+      setPage(pageNumber)
+      setHasMore(data ? data.length === PAGE_SIZE && (count ? (pageNumber + 1) * PAGE_SIZE < count : true) : false)
     } catch (err) {
       console.error('Failed to fetch real workers from database:', err)
       setFetchError(err.message || 'Error fetching records from database.')
     } finally {
       setLoadingWorkers(false)
+      setLoadingMore(false)
     }
   }, [])
 
@@ -160,7 +207,8 @@ export default function Admin() {
       if (error) throw error
       setIsAdmin(Boolean(data))
       if (data) {
-        fetchWorkers()
+        fetchWorkers(0, false)
+        fetchStatusCounts()
       }
     } catch (err) {
       console.error('Error verifying admin authorization:', err)
@@ -169,7 +217,7 @@ export default function Admin() {
       setCheckingAdmin(false)
       setAuthLoading(false)
     }
-  }, [fetchWorkers])
+  }, [fetchWorkers, fetchStatusCounts])
 
   // Check auth state
   useEffect(() => {
@@ -348,15 +396,15 @@ export default function Admin() {
     })
   }, [workers, activeTab, searchQuery])
 
-  // Count summaries
+  // Count summaries (accurate total counts even before all pages are loaded)
   const counts = useMemo(() => {
     return {
-      all: workers.length,
-      pending: workers.filter((w) => w.status === 'pending').length,
-      verified: workers.filter((w) => w.status === 'verified').length,
-      suspended: workers.filter((w) => w.status === 'suspended').length,
+      all: statusCounts.all || totalCount || workers.length,
+      pending: statusCounts.pending || workers.filter((w) => w.status === 'pending').length,
+      verified: statusCounts.verified || workers.filter((w) => w.status === 'verified').length,
+      suspended: statusCounts.suspended || workers.filter((w) => w.status === 'suspended').length,
     }
-  }, [workers])
+  }, [statusCounts, totalCount, workers])
 
   // Export to CSV
   const handleExportCSV = () => {
@@ -1005,7 +1053,7 @@ export default function Admin() {
                   </tr>
                 ) : (
                   filteredWorkers.map((w) => {
-                    const photoUrl = getPhotoPublicUrl(w.photo_path)
+                    const photoUrl = getPhotoPublicUrl(w.photo_thumb_path || w.photo_path)
                     const tier = TIERS[w.tier] || TIERS.silver
                     const isVerified = w.status === 'verified'
                     const isPending = w.status === 'pending'
@@ -1023,7 +1071,11 @@ export default function Admin() {
                             {photoUrl ? (
                               <img
                                 src={photoUrl}
-                                alt=""
+                                alt={w.full_name || ''}
+                                width={40}
+                                height={40}
+                                loading="lazy"
+                                decoding="async"
                                 className="w-10 h-10 rounded-full object-cover border border-emerald-500/60 bg-gray-800 shrink-0"
                               />
                             ) : (
@@ -1108,6 +1160,33 @@ export default function Admin() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination: Load 20 rows per page */}
+          {hasMore && (
+            <div className="p-4 bg-gray-950/80 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-xs text-gray-400">
+                Loaded <strong className="text-emerald-400">{workers.length}</strong>
+                {totalCount ? <> of <strong className="text-white">{totalCount}</strong></> : ''} staff records (20 per page)
+              </span>
+              <button
+                type="button"
+                onClick={() => fetchWorkers(page + 1, true)}
+                disabled={loadingMore}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Loading next 20 rows...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Load More Staff</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </>
     )}
@@ -1126,10 +1205,14 @@ export default function Admin() {
 
             {/* Modal Header */}
             <div className="flex items-start gap-4 border-b border-gray-800 pb-5">
-              {selectedWorker.photo_path ? (
+              {(selectedWorker.photo_path || selectedWorker.photo_thumb_path) ? (
                 <img
-                  src={getPhotoPublicUrl(selectedWorker.photo_path)}
-                  alt=""
+                  src={getPhotoPublicUrl(selectedWorker.photo_path || selectedWorker.photo_thumb_path)}
+                  alt={selectedWorker.full_name || ''}
+                  width={64}
+                  height={80}
+                  loading="lazy"
+                  decoding="async"
                   className="w-16 h-20 rounded-xl object-cover border-2 border-emerald-500/80 bg-gray-800 shrink-0"
                 />
               ) : (

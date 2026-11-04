@@ -211,6 +211,10 @@ export default function Status() {
                 <img
                   src={photoUrl}
                   alt={worker.full_name}
+                  width={80}
+                  height={96}
+                  loading="lazy"
+                  decoding="async"
                   className="w-16 h-20 sm:w-20 sm:h-24 rounded-2xl object-cover border-2 border-emerald-500 bg-gray-100 shrink-0 shadow-xs"
                 />
               ) : (

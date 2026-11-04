@@ -179,3 +179,52 @@ npm run lint
 # Production build
 npm run build
 ```
+
+---
+
+## ⚡ Supabase Storage Egress Optimization & Existing Photo Migration
+
+To stay within the Supabase Free Plan limit (5 GB Cached Egress quota) and prevent bandwidth overages:
+
+1. **Client-Side Upload Optimization**:
+   - Profile photos are automatically resized to max 600 px, converted to WebP (fallback JPEG) at quality ~0.75, targeting under 80 KB.
+   - A 160 px thumbnail is automatically generated and stored as `photo_thumb_path`.
+   - Admin tables and lists load only the 160 px thumbnail with `loading="lazy"` and `decoding="async"`.
+   - The full 600 px photo is loaded only in detail views, verification modals, and PDF certificates.
+   - Uploads use `cacheControl: '31536000'` (1 year browser cache).
+   - Document/ID proof PDFs are capped at 2 MB; document images are compressed to max 1200 px.
+
+2. **Database Migration (`supabase/migration_images.sql`)**:
+   Run the migration script in your Supabase SQL Editor to add `photo_thumb_path` to the `workers` table:
+   ```sql
+   alter table public.workers add column if not exists photo_thumb_path text;
+   create index if not exists idx_workers_photo_thumb_path on public.workers(photo_thumb_path);
+   ```
+
+3. **Recompress Existing Photos in Storage (`scripts/compress-existing-photos.mjs`)**:
+   Run the migration script to recompress already uploaded photos in `photos` and `id-proofs` buckets:
+
+   ```bash
+   # Set your project credentials (never commit the service role key)
+   export SUPABASE_URL="https://your-project.supabase.co"
+   export SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
+
+   # Dry-run first (inspects files and calculates savings without modifying anything)
+   node scripts/compress-existing-photos.mjs --dry-run
+
+   # Run live migration (generates 600px + 160px WebP, updates workers table, keeps originals)
+   node scripts/compress-existing-photos.mjs
+
+   # Run live migration and delete old large uncompressed files to reclaim storage
+   node scripts/compress-existing-photos.mjs --delete-old
+   ```
+
+4. **How to Check Storage Usage in Supabase**:
+   1. Open the [Supabase Dashboard](https://supabase.com/dashboard).
+   2. Select your CaterCrew project.
+   3. In the left navigation, go to **Reports** -> **Storage** or **Settings** -> **Usage**.
+   4. Monitor **Storage Size** (under 1 GB on Free Plan) and **Cached Egress** (under 5 GB on Free Plan).
+   5. Go to **Storage** -> **Configuration** on the `photos` bucket:
+      - Set **File size limit** to `500 KB`.
+      - Set **Allowed MIME types** to: `image/jpeg, image/png, image/webp`.
+

@@ -186,6 +186,10 @@ export default function Verify() {
             <img
               src={photoUrl}
               alt={worker.full_name}
+              width={112}
+              height={144}
+              loading="lazy"
+              decoding="async"
               className="w-28 h-36 rounded-2xl object-cover border-4 border-emerald-500 shadow-sm bg-gray-50"
             />
           ) : (

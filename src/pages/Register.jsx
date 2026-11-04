@@ -228,31 +228,36 @@ export default function Register() {
         return
       }
 
-      // 3. Upload Compressed Photo to public bucket 'photos' with cacheControl '31536000'
-      const photoFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`
+      // 3. Upload Compressed Photo & 160px Thumbnail with unique names (no upsert/overwrite) and 1-year cache
+      const uniqueId = `worker_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      const ext = photoFile.name?.split('.').pop() || 'webp'
+      const photoFileName = `${uniqueId}_600.${ext}`
+      const thumbFileName = `${uniqueId}_160_thumb.${ext}`
+
       const { error: photoUploadErr } = await supabase.storage
         .from('photos')
         .upload(photoFileName, photoFile, {
           cacheControl: '31536000',
-          upsert: true,
-          contentType: 'image/jpeg',
+          upsert: false,
+          contentType: photoFile.type || 'image/webp',
         })
 
       if (photoUploadErr) {
-        console.warn('Photo upload warning:', photoUploadErr.message)
+        throw new Error(`Photo upload failed: ${photoUploadErr.message}`)
       }
 
-      // Upload thumbnail to save egress in list views
       if (thumbBlob) {
-        const thumbFileName = photoFileName.replace('.jpg', '_thumb.jpg')
-        supabase.storage
+        const { error: thumbUploadErr } = await supabase.storage
           .from('photos')
           .upload(thumbFileName, thumbBlob, {
             cacheControl: '31536000',
-            upsert: true,
-            contentType: 'image/jpeg',
+            upsert: false,
+            contentType: photoFile.type || 'image/webp',
           })
-          .catch((err) => console.warn('Thumbnail upload warning:', err))
+
+        if (thumbUploadErr) {
+          console.warn('Thumbnail upload warning:', thumbUploadErr.message)
+        }
       }
 
       // 4. AUTOMATIC VERIFICATION: Register worker with status 'verified' and verified_at timestamp
@@ -267,6 +272,7 @@ export default function Register() {
         p_area: formData.area.trim(),
         p_travel_ok: Boolean(formData.travelOk),
         p_photo_path: photoFileName,
+        p_photo_thumb_path: thumbFileName,
         p_emergency_name: formData.emergencyName.trim(),
         p_emergency_phone: formData.emergencyPhone.trim(),
         p_consent: true,
@@ -289,7 +295,7 @@ export default function Register() {
           return
         }
 
-        // Direct insert fallback with AUTOMATIC VERIFICATION
+        // Direct insert fallback with AUTOMATIC VERIFICATION and photo_thumb_path
         console.warn('RPC register_worker error, trying direct insert with automatic verification:', rpcErr)
         const { data: insertData, error: insertErr } = await supabase
           .from('workers')
@@ -304,6 +310,7 @@ export default function Register() {
               area: payload.p_area,
               travel_ok: payload.p_travel_ok,
               photo_path: payload.p_photo_path,
+              photo_thumb_path: thumbFileName,
               experience_years: payload.p_experience_years,
               emergency_name: payload.p_emergency_name,
               emergency_phone: payload.p_emergency_phone,
@@ -313,7 +320,7 @@ export default function Register() {
               verified_at: nowIso,
             },
           ])
-          .select('id, worker_code, status, tier, verified_at')
+          .select('id, worker_code, status, tier, verified_at, photo_path, photo_thumb_path')
           .single()
 
         if (insertErr) {
@@ -326,8 +333,20 @@ export default function Register() {
           tier: 'silver',
         })
       } else {
+        // Ensure photo_thumb_path is updated in case existing RPC didn't store it yet
+        if (rpcData?.id) {
+          supabase
+            .from('workers')
+            .update({ photo_thumb_path: thumbFileName })
+            .eq('id', rpcData.id)
+            .then(() => {})
+            .catch(() => {})
+        }
+
         setRegisteredWorker({
           ...rpcData,
+          photo_path: photoFileName,
+          photo_thumb_path: thumbFileName,
           status: 'verified',
           tier: 'silver',
         })
@@ -730,7 +749,7 @@ export default function Register() {
           </div>
 
           <p className="text-xs text-gray-500">
-            Clear front-facing photo. Will appear on your verified certificate. Automatically compressed to under 100 KB for fast loading.
+            Clear front-facing photo. Resized to 600 px and compressed under 80 KB for fast loading. (Max original size 15 MB)
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -739,6 +758,10 @@ export default function Register() {
                 <img
                   src={photoPreview}
                   alt="Profile Preview"
+                  width={96}
+                  height={128}
+                  loading="lazy"
+                  decoding="async"
                   className="w-24 h-32 rounded-2xl object-cover border-2 border-emerald-500 shadow-sm"
                 />
               </div>

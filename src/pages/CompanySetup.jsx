@@ -15,6 +15,7 @@ import {
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { KERALA_DISTRICTS } from '../lib/constants'
 import { useAuth } from '../context/AuthContext'
+import { compressDocument } from '../lib/imageCompression'
 
 const COMPANY_TYPES = [
   'catering company',
@@ -96,22 +97,29 @@ export default function CompanySetup() {
     }
   }
 
-  const handleDocSelect = (e) => {
+  const [isOptimizingDoc, setIsOptimizingDoc] = useState(false)
+
+  const handleDocSelect = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (file.size > 10 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, doc: 'File size must be less than 10 MB.' }))
-      return
-    }
-
-    setDocFile(file)
-    if (file.type.startsWith('image/')) {
-      setDocPreview(URL.createObjectURL(file))
-    } else {
-      setDocPreview(null)
-    }
     setErrors((prev) => ({ ...prev, doc: null }))
+    setIsOptimizingDoc(true)
+
+    try {
+      const result = await compressDocument(file)
+      setDocFile(result.file)
+      if (!result.isPdf && result.previewUrl) {
+        setDocPreview(result.previewUrl)
+      } else {
+        setDocPreview(null)
+      }
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, doc: err.message || 'Error processing document.' }))
+    } finally {
+      setIsOptimizingDoc(false)
+      if (e.target) e.target.value = ''
+    }
   }
 
   const validate = () => {
@@ -184,6 +192,7 @@ export default function CompanySetup() {
         const { error: uploadErr } = await supabase.storage
           .from('company-docs')
           .upload(docPath, docFile, {
+            cacheControl: '31536000',
             upsert: true,
           })
 
@@ -582,14 +591,23 @@ export default function CompanySetup() {
                 <span className="text-sm font-bold text-gray-700">
                   {docFile ? docFile.name : 'Click to upload proof (PDF, JPG, PNG)'}
                 </span>
-                <span className="text-xs text-gray-400 mt-1">Maximum size 10 MB</span>
+                <span className="text-xs text-gray-400 mt-1">PDF under 2 MB • Images compressed to 1200 px</span>
                 <input
                   type="file"
                   onChange={handleDocSelect}
                   accept="image/*,application/pdf"
+                  disabled={isOptimizingDoc}
                   className="hidden"
                 />
               </label>
+
+              {isOptimizingDoc && (
+                <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold animate-pulse mt-2">
+                  <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Optimizing document...</span>
+                </div>
+              )}
+
               {errors.doc && (
                 <p className="text-rose-600 text-xs mt-1 font-medium">{errors.doc}</p>
               )}
@@ -599,6 +617,10 @@ export default function CompanySetup() {
                   <img
                     src={docPreview}
                     alt="Preview"
+                    width={128}
+                    height={96}
+                    loading="lazy"
+                    decoding="async"
                     className="w-32 h-24 object-cover rounded-xl border border-gray-200"
                   />
                 </div>
