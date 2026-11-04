@@ -139,7 +139,8 @@ export default function AdminCompaniesTab() {
         setSelectedCompany((prev) => ({ ...prev, status: newStatus }))
       }
     } catch (err) {
-      alert(`Failed to update status: ${err.message}`)
+      console.error('Failed to update status:', err)
+      setError(`Failed to update status: ${err.message}`)
     } finally {
       setActionLoading(false)
     }
@@ -147,8 +148,12 @@ export default function AdminCompaniesTab() {
 
   // Delete Company
   const handleDeleteCompany = async (companyId) => {
-    if (!window.confirm('Are you sure you want to delete this company? This action is permanent.')) {
-      return
+    try {
+      if (typeof window !== 'undefined' && window.confirm && !window.confirm('Are you sure you want to delete this company? This action is permanent.')) {
+        return
+      }
+    } catch {
+      // In restricted iframe
     }
     setActionLoading(true)
     try {
@@ -159,7 +164,8 @@ export default function AdminCompaniesTab() {
       setCompanies((prev) => prev.filter((c) => c.id !== companyId))
       setSelectedCompany(null)
     } catch (err) {
-      alert(`Failed to delete company: ${err.message}`)
+      console.error('Failed to delete company:', err)
+      setError(`Failed to delete company: ${err.message}`)
     } finally {
       setActionLoading(false)
     }

@@ -1,6 +1,6 @@
-# CaterCrew — Event Catering Staff & Booking Platform
+# CaterCrew (Silver Staff Registration & Verification)
 
-CaterCrew connects event management companies across Kerala with verified catering staff ("Silver Boys"). Staff have tiers: **Silver**, **Golden**, and **Diamond**. The platform handles staff registration, background verification, digital PDF certificate generation, event posting, and instant slot bookings.
+CaterCrew connects event management companies across Kerala with verified catering staff ("boys"). Staff have tiers: **Silver**, **Golden**, and **Diamond**. This initial version focuses on **Silver Boy** registration, verification, digital PDF certificate generation, and administration.
 
 ---
 
@@ -9,222 +9,171 @@ CaterCrew connects event management companies across Kerala with verified cateri
 - **Frontend**: React 19, Vite, Tailwind CSS v4, React Router 7
 - **Icons**: Lucide React
 - **Certificate Generation**: jsPDF (A4 landscape) + QRCode (tamper-proof QR linking to public verification badge)
-- **Backend**: Supabase (PostgreSQL 15+, Row Level Security, Storage, Auth, Security-Definer RPCs)
-- **Deployment**: Cloudflare Workers (`wrangler.jsonc`) at `silver.catercrew.online`
+- **Backend**: Supabase (PostgreSQL, Row Level Security, Storage, Auth, Security-Definer RPCs)
+- **Design Philosophy**: Mobile-first, minimal design, pure white background, warm amber/gold accent, large readable text, big touch-friendly buttons.
 
 ---
 
 ## 📱 Pages & Features
 
-### 1. Catering Boy Workflow
-- **Public Registration (`/register`)**:
-  - Full details, validated 18+ age requirement, district selection, photo, and government ID proof upload.
-- **Verification Status (`/status/:id`)**:
-  - Real-time status lookup (Pending, Verified, or Suspended).
-  - When verified, boys can download the tamper-proof PDF certificate.
-- **Public Verification Badge (`/verify/:id`)**:
-  - QR destination from the certificate. Shows only safe public details (Full Name, Photo, Tier, ID, Verified Date).
-- **Boy Login & Signup (`/signup` -> "I am a Catering Boy")**:
-  - Enters CaterCrew ID (e.g. `CC-SLV-000001`) and registered phone number.
-  - Eligibility checked via security-definer RPC `check_worker_eligibility(code, phone)`.
-  - Links login credentials (Email/Password or Google) via RPC `activate_worker(code, phone)`.
-- **Events & Booking (`/events`, `/events/:id`, `/my-bookings`)**:
-  - Browse verified events across Kerala with district and date filters.
-  - Large display of confirmed wage per boy in ₹ (e.g., ₹1,200).
-  - Keyless Google Maps venue embed with one-tap directions, Open in Maps, and WhatsApp share.
-  - Instant slot booking via RPC `book_slot(p_event_id)` and cancellation via RPC `cancel_booking(p_booking_id)` (blocked <24h before event).
-  - Reveals event coordinator's name and direct Call & WhatsApp buttons once booked.
-
-### 2. Event Company Workflow
-- **Company Signup (`/signup` -> "I am an Event Company")**:
-  - Google Sign-in or Email + Password.
-- **Company Setup (`/company/setup`)**:
-  - Numbered form cards:
-    1. Company details (name, type, years in business)
-    2. Contact (name, phone, WhatsApp with "Same as phone" checkbox, email)
-    3. Location (Kerala district dropdown, area, full address)
-    4. Verification (GST number, business proof upload to private `company-docs` bucket)
-    5. Consent
-  - Accounts start with `pending` status until reviewed by CaterCrew operations.
-- **Company Dashboard (`/company/dashboard`)**:
-  - Overview of posted events, active slots, and boys hired.
-- **Post & Edit Events (`/company/events/new`, `/company/events/:id/edit`)**:
-  - Event details, timing with auto-calculated duration, venue, Google Maps link validation, and geolocation coordinates.
-  - Number of boys needed and wage per boy in ₹.
-  - Uniform multi-select chips (Black shirt, White shirt, Black trousers, Shoes, Clean shave).
-- **Manage Event & Booked Boys (`/company/events/:id`)**:
-  - Live progress bar of booked slots.
-  - Real-time roster of confirmed boys with photo, age, height, district, experience, and phone.
-  - Direct Call and WhatsApp buttons for event coordinators.
-  - Remove boy feature with automatic slot reopening.
-  - Printable staff attendance sheet for venue gates.
-
-### 3. Administrator Dashboard (`/adminaccess`)
-- Supabase Email & Password authentication; authorized against the `admins` table.
-- **Staff Registrations Tab**: Review, verify, change tiers, or suspend catering boys.
-- **Companies Tab**: Review pending event companies, inspect uploaded business proofs via short-lived signed URLs, approve or suspend accounts.
-- **Events Tab**: Oversee all catering events across Kerala, monitor slot fulfillment, cancel or delete events.
-- **Report Page**: Attendance and shortage monitoring for active events.
+1. **Home (`/`)**:
+   - CaterCrew branding and one-line description.
+   - Prominent **"Register as Silver Boy"** action button.
+   - **"Verify a certificate"** search card with direct worker ID lookup.
+2. **Registration Form (`/register`)**:
+   - Public registration (no login required).
+   - Form fields:
+     - Full Name, Date of Birth (validated 18+ requirement), Height (cm), Weight (kg, optional)
+     - Phone, WhatsApp number (with "Same as phone" option)
+     - District (dropdown of all 14 Kerala districts), Town / Area, Willingness to travel across districts
+     - Photo upload (required, image only, max 3 MB)
+     - Government ID proof upload (Aadhaar or College ID, PDF or image, max 5 MB)
+     - Experience in years, Roles selection (Serving, Kitchen help, Setup, Cleaning), Uniform check (white shirt & black pants)
+     - Emergency contact person and phone
+     - Mandatory consent checkbox
+   - **Submission Success Screen**:
+     - Displays unique Worker ID (e.g., `CC-SLV-000123`).
+     - Message stating registration is pending review.
+     - Direct link & button to his personal status page.
+3. **Status Page (`/status/:id`)**:
+   - Real-time status lookup (Pending, Verified, or Suspended).
+   - When **Verified**:
+     - **"Download certificate (PDF)"**: Generates an elegant A4 landscape PDF certificate in the browser with worker photo, unique ID, tier, issue date, and verification QR code.
+     - **"Copy verification link"**: Copies public verification link to clipboard.
+     - **"View Public Verification Badge Page"**: Opens the public verification view.
+4. **Public Verification Page (`/verify/:id`)**:
+   - The target destination of the certificate's QR code.
+   - Shows a large green **VERIFIED** badge (or Pending / Suspended / Not found).
+   - **Privacy Protection**: Displays **only** safe public details: Full Name, Photo, Staff Tier, Worker ID, and Verified Date. Never exposes phone number, address, date of birth, or ID proof.
+5. **Admin Dashboard (`/admin`)**:
+   - Supabase Email & Password authentication.
+   - Validates that the logged-in user is listed in the `admins` table.
+   - Overview metrics: Total, Pending, Verified, and Suspended counts.
+   - Filter tabs (All / Pending / Verified / Suspended) and instant search by Name, Phone, ID, or District.
+   - Detailed modal view with secure **signed URLs** for reviewing private ID proof documents (images or PDFs).
+   - Management actions:
+     - **Verify Staff Member** (marks status as verified, records `verified_at` timestamp)
+     - **Suspend**
+     - **Change Tier** (Silver, Golden, Diamond)
+     - **Reject / Delete** with confirmation safeguard
+   - **Export to CSV**: Downloads complete registration records for offline dispatching or accounting.
 
 ---
 
-## 🗄️ Supabase Database Migration Guide
+## 🗄️ Supabase Setup Guide
 
-The database schema and RPCs are divided into two safe SQL scripts:
+The complete SQL schema, trigger functions, RLS policies, and storage setup are located in [`supabase/schema.sql`](file:///home/adithyan/Documents/Catercrew/Catercrew-Silverboys-1-/supabase/schema.sql).
 
-1. **Initial Schema**: [`supabase/schema.sql`](supabase/schema.sql)
-   - Creates `workers`, `admins`, triggers for worker IDs (`CC-SLV-000001`), RLS policies, `photos`, and `id-proofs` buckets.
+### Step 1: Run the Database Schema
 
-2. **Events & Company Subsystem Migration**: [`supabase/migration_events_v2.sql`](supabase/migration_events_v2.sql)
-   - Creates `companies`, `events`, and `bookings` tables with safe constraints and indexes.
-   - Creates the `events_public` view (masks coordinator phone until booked).
-   - Creates private storage bucket `company-docs` with RLS policies.
-   - Installs RPC functions:
-     - `check_worker_eligibility(p_worker_code, p_phone)`
-     - `activate_worker(p_worker_code, p_phone)`
-     - `get_user_role()`
-     - `book_slot(p_event_id)`
-     - `cancel_booking(p_booking_id, p_reason)`
-     - `get_event_company_contact(p_event_id)`
-     - `get_event_booked_workers(p_event_id)`
-     - `company_remove_worker(p_booking_id, p_reason)`
-
-### Applying the Migration:
-1. Open your [Supabase Project Dashboard](https://supabase.com/dashboard).
-2. Navigate to **SQL Editor** in the left sidebar.
-3. Click **New Query**, paste the contents of `supabase/migration_events_v2.sql`, and click **Run**.
-4. The migration is idempotent and safe to run on existing databases (`if not exists`, `drop policy if exists`).
+1. Open your [Supabase Dashboard](https://supabase.com/dashboard) and navigate to your project.
+2. Go to the **SQL Editor** in the left sidebar.
+3. Click **New Query**, copy the entire contents of [`supabase/schema.sql`](file:///home/adithyan/Documents/Catercrew/Catercrew-Silverboys-1-/supabase/schema.sql), paste it into the editor, and click **Run**.
+4. This script sets up:
+   - `workers` table with constraints and indexes.
+   - Sequence and `generate_worker_code` trigger for generating codes formatted as `CC-SLV-000001`.
+   - `admins` table.
+   - Row Level Security (RLS) policies on `workers` and `admins`.
+   - Security-definer RPC functions: `get_public_worker(code)` and `register_worker(...)`.
+   - Storage buckets: `photos` (public read) and `id-proofs` (private, admin signed URL only).
 
 ---
 
-## 🔐 Google Cloud OAuth & Supabase Setup Checklist
+### Step 2: Create the First Admin User
 
-To enable "Continue with Google" authentication for both Catering Boys and Event Companies:
-
-### Your Configured Client ID:
-`995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu.apps.googleusercontent.com`
-
----
-
-### Step 1: In Google Cloud Console
-1. Go to [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
-2. Click your OAuth 2.0 Web Client (`995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu...`).
-3. Under **Authorized JavaScript origins**, make sure you have:
-   - `https://silver.catercrew.online`
-   - `https://ais-dev-ayhp4cpjb5v5646t4tfdg4-987152010618.asia-southeast1.run.app`
-   - `http://localhost:3000`
-4. Under **Authorized redirect URIs**, add your Supabase Auth callback:
-   - `https://euamrlqdpkzpnrhftjro.supabase.co/auth/v1/callback`
-5. Click **Save** and copy your **Client Secret**.
+1. In the Supabase Dashboard, navigate to **Authentication** -> **Users**.
+2. Click **Add User** -> **Create User**.
+3. Enter an email (e.g., `admin@catercrew.in`) and a secure password.
+4. Copy the generated **User UID** (a UUID string such as `e94e24ef-9886-4f6b-a2c6-993d6d5a1b32`).
+5. Open the **SQL Editor** and run the following statement (substituting your copied UID):
+   ```sql
+   insert into public.admins (user_id)
+   values ('YOUR_COPIED_USER_UID')
+   on conflict do nothing;
+   ```
+6. You can now log in at `/admin` using this email and password!
 
 ---
 
-### Step 2: In Supabase Authentication Providers
-1. Open your [Supabase Google Provider Dashboard](https://supabase.com/dashboard/project/euamrlqdpkzpnrhftjro/auth/providers).
-2. Click on **Google**:
-   - Toggle **Enable Sign in with Google** to **ON**.
-   - Paste **Client ID**:
-     `995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu.apps.googleusercontent.com`
-   - Paste your **Client Secret** from Google Cloud Console.
-   - Click **Save**.
-3. Under **Authentication** > **URL Configuration**:
-   - Ensure **Site URL** is set to `https://silver.catercrew.online`
-   - Add **Redirect URLs**:
-     - `https://silver.catercrew.online/auth/callback`
-     - `https://ais-dev-ayhp4cpjb5v5646t4tfdg4-987152010618.asia-southeast1.run.app/auth/callback`
-     - `http://localhost:3000/auth/callback`
-4. Click **Save**.
+## ⚙️ Environment Variables
 
----
-
-### ⚠️ Instant Alternative While Configuring
-You do not need to wait for Google OAuth setup to test or use CaterCrew:
-- Users and event companies can register and log in right now using **Email & Password**.
-
----
-
-## 👨‍💼 Approving Your First Company & Testing
-
-1. **Sign up as a Company**:
-   - Navigate to `/signup` and select **"I am an Event Company"**.
-   - Sign up with email or Google.
-   - Fill in `/company/setup` with company details and upload visiting card/license.
-2. **Approve via Admin Panel**:
-   - Navigate to `/adminaccess`.
-   - Log in with your admin credentials.
-   - Click the **"Companies"** tab.
-   - Click **Review** on the newly registered company, review proof document, and click **Approve Company**.
-3. **Post an Event**:
-   - The company can now go to `/company/dashboard` and click **"Post New Event"** (`/company/events/new`).
-   - Enter event title, date, reporting time, venue with map link, number of boys, and wage (₹).
-4. **Book as a Catering Boy**:
-   - A registered Silver Boy can log in at `/login` or sign up at `/signup` with his CaterCrew ID.
-   - Open `/events`, view the event details, and click **"Confirm & Book My Slot"**.
-   - The company will immediately see his profile and phone number under `/company/events/:id`.
-
----
-
-## 💻 Local Development
+Create a `.env` file in the project root based on `.env.example`:
 
 ```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Run linting
-npm run lint
-
-# Production build
-npm run build
+cp .env.example .env
 ```
+
+Set your Supabase credentials:
+```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+> **Note**: Both values can be found in your Supabase project under **Project Settings** -> **API**.
 
 ---
 
-## ⚡ Supabase Storage Egress Optimization & Existing Photo Migration
+## 💻 Running Locally
 
-To stay within the Supabase Free Plan limit (5 GB Cached Egress quota) and prevent bandwidth overages:
-
-1. **Client-Side Upload Optimization**:
-   - Profile photos are automatically resized to max 600 px, converted to WebP (fallback JPEG) at quality ~0.75, targeting under 80 KB.
-   - A 160 px thumbnail is automatically generated and stored as `photo_thumb_path`.
-   - Admin tables and lists load only the 160 px thumbnail with `loading="lazy"` and `decoding="async"`.
-   - The full 600 px photo is loaded only in detail views, verification modals, and PDF certificates.
-   - Uploads use `cacheControl: '31536000'` (1 year browser cache).
-   - Document/ID proof PDFs are capped at 2 MB; document images are compressed to max 1200 px.
-
-2. **Database Migration (`supabase/migration_images.sql`)**:
-   Run the migration script in your Supabase SQL Editor to add `photo_thumb_path` to the `workers` table:
-   ```sql
-   alter table public.workers add column if not exists photo_thumb_path text;
-   create index if not exists idx_workers_photo_thumb_path on public.workers(photo_thumb_path);
-   ```
-
-3. **Recompress Existing Photos in Storage (`scripts/compress-existing-photos.mjs`)**:
-   Run the migration script to recompress already uploaded photos in `photos` and `id-proofs` buckets:
-
+1. **Install dependencies**:
    ```bash
-   # Set your project credentials (never commit the service role key)
-   export SUPABASE_URL="https://your-project.supabase.co"
-   export SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
-
-   # Dry-run first (inspects files and calculates savings without modifying anything)
-   node scripts/compress-existing-photos.mjs --dry-run
-
-   # Run live migration (generates 600px + 160px WebP, updates workers table, keeps originals)
-   node scripts/compress-existing-photos.mjs
-
-   # Run live migration and delete old large uncompressed files to reclaim storage
-   node scripts/compress-existing-photos.mjs --delete-old
+   npm install
    ```
 
-4. **How to Check Storage Usage in Supabase**:
-   1. Open the [Supabase Dashboard](https://supabase.com/dashboard).
-   2. Select your CaterCrew project.
-   3. In the left navigation, go to **Reports** -> **Storage** or **Settings** -> **Usage**.
-   4. Monitor **Storage Size** (under 1 GB on Free Plan) and **Cached Egress** (under 5 GB on Free Plan).
-   5. Go to **Storage** -> **Configuration** on the `photos` bucket:
-      - Set **File size limit** to `500 KB`.
-      - Set **Allowed MIME types** to: `image/jpeg, image/png, image/webp`.
+2. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:5173](http://localhost:5173) in your browser.
 
+3. **Lint check**:
+   ```bash
+   npm run lint
+   ```
+
+4. **Production build**:
+   ```bash
+   npm run build
+   ```
+
+---
+
+## 🌐 Deployment Instructions
+
+### Option 1: Vercel
+
+1. Push your repository to GitHub.
+2. Go to [Vercel](https://vercel.com) and click **Add New** -> **Project**.
+3. Import this repository.
+4. In the **Environment Variables** section, add:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+5. Keep default build settings (`npm run build`, output directory `dist`).
+6. Click **Deploy**.
+
+> **SPA Routing on Vercel**: A `vercel.json` rewrite file ensures client-side routes (e.g. `/register`, `/verify/:id`) load seamlessly without 404s.
+
+---
+
+### Option 2: Cloudflare Pages
+
+1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com/) and go to **Workers & Pages**.
+2. Click **Create Application** -> **Pages** -> **Connect to Git**.
+3. Select your repository.
+4. Set the build configuration:
+   - Framework preset: **Vite**
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+5. Under **Environment variables**, add:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+6. Click **Save and Deploy**.
+7. For single-page app routing on Cloudflare Pages, a `public/_redirects` file with `/*  /index.html  200` is included.
+
+---
+
+## 🔒 Security & Privacy Notes
+
+- **Restricted Public RPC**: The verification page and status lookup do not select from the `workers` table directly; they execute `get_public_worker`, which returns only public display fields (`full_name`, `photo_path`, `tier`, `status`, `worker_code`, `verified_at`).
+- **Private ID Proofs**: The `id-proofs` bucket has RLS enabled with no public read access. Files can only be downloaded by authenticated admins via short-lived signed URLs.
+- **Client Fallback**: If Supabase credentials have not been configured yet, the app activates a safe demo mode with sample records and helpful configuration banners.

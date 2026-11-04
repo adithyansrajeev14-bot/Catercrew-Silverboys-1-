@@ -58,29 +58,3 @@ export const STATUS_CONFIG = {
 }
 
 export const MAX_PHOTO_SIZE_MB = 3
-
-export const DISTRICTS = KERALA_DISTRICTS
-
-export const UNIFORM_OPTIONS = [
-  'Black formal shirt',
-  'White formal shirt',
-  'Black formal pant',
-  'Black shoes',
-  'Clean shave',
-  'Waistcoat',
-  'White dhoti / mundu with velcro',
-  'Apron',
-]
-
-export const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  '995897892983-kea6h6q4m64ghu4lv1pl17rma80mhuhu.apps.googleusercontent.com'
-
-export const SUPABASE_PROJECT_REF = 'euamrlqdpkzpnrhftjro'
-
-export const SUPABASE_OAUTH_CALLBACK_URL =
-  'https://euamrlqdpkzpnrhftjro.supabase.co/auth/v1/callback'
-
-export const COMMUNITY_WHATSAPP_LINK =
-  'https://chat.whatsapp.com/I8n9JZ1JhNnLdT7VhziOGX?s=cl&p=i&mlu=4&ilr=4&iam=2'
-

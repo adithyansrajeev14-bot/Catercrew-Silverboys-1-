@@ -50,7 +50,11 @@ export default function Signup() {
   // Google OAuth initiation
   const handleGoogleSignIn = async (flowType) => {
     if (!isSupabaseConfigured) {
-      alert('Supabase is not configured yet. Please add your credentials.')
+      if (flowType === 'worker') {
+        setWorkerAuthError('Supabase is not configured yet. Please add your credentials.')
+      } else {
+        setCompanyAuthError('Supabase is not configured yet. Please add your credentials.')
+      }
       return
     }
 

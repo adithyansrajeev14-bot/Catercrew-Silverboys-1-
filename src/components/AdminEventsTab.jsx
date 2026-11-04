@@ -84,7 +84,8 @@ export default function AdminEventsTab() {
         prev.map((e) => (e.id === eventId ? { ...e, status: newStatus } : e))
       )
     } catch (err) {
-      alert(`Failed to update status: ${err.message}`)
+      console.error('Failed to update status:', err)
+      setError(`Failed to update status: ${err.message}`)
     } finally {
       setActionLoading(false)
     }
@@ -92,8 +93,12 @@ export default function AdminEventsTab() {
 
   // Delete Event
   const handleDeleteEvent = async (eventId) => {
-    if (!window.confirm('Are you sure you want to delete this event? This will also remove any bookings.')) {
-      return
+    try {
+      if (typeof window !== 'undefined' && window.confirm && !window.confirm('Are you sure you want to delete this event? This will also remove any bookings.')) {
+        return
+      }
+    } catch {
+      // In restricted iframe
     }
     setActionLoading(true)
     try {
@@ -103,7 +108,8 @@ export default function AdminEventsTab() {
       }
       setEvents((prev) => prev.filter((e) => e.id !== eventId))
     } catch (err) {
-      alert(`Failed to delete event: ${err.message}`)
+      console.error('Failed to delete event:', err)
+      setError(`Failed to delete event: ${err.message}`)
     } finally {
       setActionLoading(false)
     }

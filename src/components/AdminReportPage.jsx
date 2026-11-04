@@ -235,7 +235,15 @@ export default function AdminReportPage({ workers = [] }) {
   // Open WhatsApp Link
   const handleOpenWhatsApp = (report) => {
     const link = generateWhatsAppLink(report)
-    window.open(link, '_blank')
+    try {
+      const a = document.createElement('a')
+      a.href = link
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.click()
+    } catch {
+      window.location.href = link
+    }
   }
 
   // Mark Shortage Resolved
@@ -246,10 +254,15 @@ export default function AdminReportPage({ workers = [] }) {
 
   // Delete Report
   const handleDeleteReport = (id) => {
-    if (confirm('Are you sure you want to delete this event report?')) {
-      deleteEventReport(id)
-      reloadReports()
+    try {
+      if (typeof window !== 'undefined' && window.confirm && !window.confirm('Are you sure you want to delete this event report?')) {
+        return
+      }
+    } catch {
+      // In restricted iframe environments
     }
+    deleteEventReport(id)
+    reloadReports()
   }
 
   // Summary Metrics

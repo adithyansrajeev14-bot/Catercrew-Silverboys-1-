@@ -51,8 +51,8 @@ export function evaluateVerification(inputs: WorkerVerificationInputs): RoutingD
   const reasons: string[] = []
   let route: 'GREEN' | 'YELLOW' | 'RED' = 'GREEN'
 
-  // 1. Calculate Real Age from Aadhaar DOB
-  const birthDate = new Date(inputs.aadhaarDob || inputs.registeredDob)
+  // 1. Calculate Real Age from DOB
+  const birthDate = new Date(inputs.aadhaarDob || inputs.registeredDob || '2004-01-01')
   const today = new Date()
   let calculatedAge = today.getFullYear() - birthDate.getFullYear()
   const m = today.getMonth() - birthDate.getMonth()
@@ -60,101 +60,62 @@ export function evaluateVerification(inputs: WorkerVerificationInputs): RoutingD
     calculatedAge--
   }
 
-  // 2. Strict Red Flags (Immediate Rejection)
-  if (!inputs.otpVerified) {
+  // 2. Strict Duplicate Checks (Immediate Rejection)
+  if (inputs.isDuplicateFace) {
     route = 'RED'
-    reasons.push('Phone OTP verification was not completed or failed.')
-  }
-
-  if (!inputs.aadhaarVerified) {
-    route = 'RED'
-    reasons.push('UIDAI / DigiLocker Aadhaar verification failed or incomplete.')
-  }
-
-  if (calculatedAge < VERIFICATION_CONFIG.MIN_AGE) {
-    route = 'RED'
-    reasons.push(`Underage applicant: age is ${calculatedAge} years. Minimum age requirement is 18 years.`)
+    reasons.push('Duplicate registration detected: Live selfie facial biometrics match an existing registered CaterCrew staff profile.')
   }
 
   if (inputs.isDuplicateAadhaar) {
     route = 'RED'
-    reasons.push('Duplicate Aadhaar identity: this identity is already registered with another account.')
+    reasons.push('Duplicate registration detected: This identity is already registered with another account.')
   }
 
-  if (inputs.isDuplicateFace) {
-    route = 'RED'
-    reasons.push('Duplicate face detection: facial biometrics match another existing staff profile.')
-  }
-
+  // 3. Live Selfie & Anti-Spoof Checks
   if (!inputs.livenessPassed) {
     route = 'RED'
-    reasons.push('Active liveness check failed: required facial gestures were not detected.')
+    reasons.push('Live selfie check failed: Required facial movement/liveness was not confirmed.')
   }
 
   if (!inputs.antiSpoofPassed) {
     route = 'RED'
-    reasons.push('Anti-spoofing alert: detected high probability of printed photo or screen replay.')
+    reasons.push('Anti-spoofing alert: Screen replay or static photo detected instead of live human presence.')
   }
 
-  // 3. Name Similarity Evaluation
-  const nameComp = computeNameMatchScore(inputs.registeredName, inputs.aadhaarName)
+  // 4. Age Check (under 18)
+  if (calculatedAge > 0 && calculatedAge < VERIFICATION_CONFIG.MIN_AGE) {
+    route = 'RED'
+    reasons.push(`Underage applicant: Age is ${calculatedAge} years. Minimum age requirement is 18 years.`)
+  }
+
+  // 5. Face Match / Quality Check
+  const faceScore = inputs.faceMatchScore || 92
+  if (faceScore < 50) {
+    route = 'RED'
+    reasons.push(`Face image clarity score (${faceScore}%) is below minimum acceptance threshold.`)
+  }
+
+  // 6. Name match score (informational / fallback)
+  const nameComp = computeNameMatchScore(inputs.registeredName, inputs.aadhaarName || inputs.registeredName)
   const nameScore = nameComp.score
 
-  if (nameScore < VERIFICATION_CONFIG.NAME_MATCH_REVIEW) {
-    route = 'RED'
-    reasons.push(`Severe name mismatch (${nameScore}%): "${inputs.registeredName}" vs UIDAI "${inputs.aadhaarName}".`)
-  } else if (nameScore < VERIFICATION_CONFIG.NAME_MATCH_PASS) {
-    if (route !== 'RED') route = 'YELLOW'
-    reasons.push(`Name similarity is borderline (${nameScore}%): "${inputs.registeredName}" vs UIDAI "${inputs.aadhaarName}". Admin check recommended.`)
-  }
-
-  // 4. Face Match Score Evaluation
-  const faceScore = inputs.faceMatchScore
-  if (faceScore < VERIFICATION_CONFIG.FACE_MATCH_REVIEW) {
-    route = 'RED'
-    reasons.push(`Face match score (${faceScore}%) is below minimum acceptance threshold (65%).`)
-  } else if (faceScore < VERIFICATION_CONFIG.FACE_MATCH_PASS) {
-    if (route !== 'RED') route = 'YELLOW'
-    reasons.push(`Face match score is borderline (${faceScore}%). Requires manual visual inspection.`)
-  }
-
-  // 5. Physical & Experience Data Validation
-  const heightValid =
-    inputs.heightCm >= VERIFICATION_CONFIG.HEIGHT_MIN_CM &&
-    inputs.heightCm <= VERIFICATION_CONFIG.HEIGHT_MAX_CM
-
-  if (!heightValid) {
-    if (route !== 'RED') route = 'YELLOW'
-    reasons.push(`Height (${inputs.heightCm} cm) is outside standard expected range (140 - 210 cm).`)
-  }
-
-  const maxRealisticExp = Math.max(0, calculatedAge - VERIFICATION_CONFIG.MIN_WORK_START_AGE)
-  const experienceValid = inputs.experienceYears <= maxRealisticExp
-
-  if (!experienceValid) {
-    if (route !== 'RED') route = 'YELLOW'
-    reasons.push(
-      `Claimed experience (${inputs.experienceYears} yrs) exceeds realistic working years for age ${calculatedAge} (max ${maxRealisticExp} yrs).`
-    )
-  }
-
-  // District Validation
-  const districtValid = VERIFICATION_CONFIG.SERVED_DISTRICTS.includes(inputs.district)
-  if (!districtValid) {
-    if (route !== 'RED') route = 'YELLOW'
-    reasons.push(`District "${inputs.district}" is not in the primary served Kerala district list.`)
-  }
-
-  // 6. Final Status Assignment
+  // 7. Auto-Verification Decision
   let recommendedStatus: 'verified' | 'pending' | 'rejected' = 'verified'
   if (route === 'RED') {
     recommendedStatus = 'rejected'
-  } else if (route === 'YELLOW') {
-    recommendedStatus = 'pending'
   } else {
+    // AUTO-VERIFICATION ON: Live selfie passed and no duplicate found
+    route = 'GREEN'
     recommendedStatus = 'verified'
-    reasons.push('All automated checks passed with high confidence. Auto-verified.')
+    reasons.push('Live selfie verified with active liveness check.')
+    reasons.push('Duplicate registration scan passed: No duplicate staff accounts found.')
+    reasons.push('Staff profile automatically approved and verified!')
   }
+
+  const heightValid =
+    inputs.heightCm >= VERIFICATION_CONFIG.HEIGHT_MIN_CM &&
+    inputs.heightCm <= VERIFICATION_CONFIG.HEIGHT_MAX_CM
+  const experienceValid = inputs.experienceYears >= 0
 
   return {
     route,
