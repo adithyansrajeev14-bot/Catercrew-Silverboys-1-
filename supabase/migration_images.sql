@@ -81,10 +81,11 @@ begin
     has_uniform,
     emergency_name,
     emergency_phone,
-    consent
+    consent,
+    verified_at
   ) values (
     'silver',
-    'pending',
+    'verified',
     trim(p_full_name),
     p_dob,
     p_height_cm,
@@ -102,7 +103,8 @@ begin
     coalesce(p_has_uniform, false),
     trim(p_emergency_name),
     trim(p_emergency_phone),
-    true
+    true,
+    now()
   )
   returning * into v_worker;
 
@@ -110,9 +112,42 @@ begin
     'id', v_worker.id,
     'worker_code', v_worker.worker_code,
     'status', v_worker.status,
-    'tier', v_worker.tier
+    'tier', v_worker.tier,
+    'verified_at', v_worker.verified_at
   );
 end;
 $$;
 
 grant execute on function public.register_worker to anon, authenticated;
+
+-- 5. Security-definer helper RPC to auto-verify newly registered pending workers
+create or replace function public.auto_verify_worker(p_worker_code text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_worker record;
+begin
+  update public.workers
+  set status = 'verified',
+      verified_at = coalesce(verified_at, now())
+  where upper(trim(worker_code)) = upper(trim(p_worker_code))
+    and status = 'pending'
+  returning id, worker_code, status, verified_at into v_worker;
+
+  if not found then
+    return json_build_object('success', false);
+  end if;
+
+  return json_build_object(
+    'success', true,
+    'worker_code', v_worker.worker_code,
+    'status', v_worker.status,
+    'verified_at', v_worker.verified_at
+  );
+end;
+$$;
+
+grant execute on function public.auto_verify_worker(text) to anon, authenticated;

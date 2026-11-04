@@ -9,7 +9,7 @@ import {
   ExternalLink,
   MessageCircle,
 } from 'lucide-react'
-import { supabase, isSupabaseConfigured, getPhotoPublicUrl } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, getPhotoPublicUrl, resolveEffectiveWorkerStatus } from '../lib/supabase'
 import { TIERS, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 
 export default function Verify() {
@@ -55,14 +55,16 @@ export default function Verify() {
           if (!qData) {
             setNotFound(true)
           } else {
-            setWorker(qData)
+            const resolved = await resolveEffectiveWorkerStatus(qData)
+            setWorker(resolved)
           }
         } else {
           const result = Array.isArray(data) ? data[0] : data
           if (!result || !result.worker_code) {
             setNotFound(true)
           } else {
-            setWorker(result)
+            const resolved = await resolveEffectiveWorkerStatus(result)
+            setWorker(resolved)
           }
         }
       } catch (err) {

@@ -26,6 +26,8 @@ import {
   isSupabaseConfigured,
   getPhotoPublicUrl,
   checkDatabaseConnection,
+  publishAutoVerifyReceipt,
+  removeAutoVerifyReceipt,
 } from '../lib/supabase'
 import { TIERS } from '../lib/constants'
 import AdminReportPage from '../components/AdminReportPage'
@@ -130,6 +132,70 @@ export default function Admin() {
 
   const PAGE_SIZE = 20
 
+  const MANUAL_PENDING_KEY = 'catercrew_admin_manual_pending_ids'
+
+  const getManualPendingIds = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(MANUAL_PENDING_KEY)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }, [])
+
+  const setManualPendingId = useCallback((workerId, isManualPending) => {
+    try {
+      const current = new Set(getManualPendingIds())
+      if (isManualPending) {
+        current.add(workerId)
+      } else {
+        current.delete(workerId)
+      }
+      localStorage.setItem(MANUAL_PENDING_KEY, JSON.stringify([...current]))
+    } catch {
+      // Ignore storage quota issues
+    }
+  }, [getManualPendingIds])
+
+  // Automatically promote newly entered pending registrations to 'verified' in Supabase using Admin privileges
+  const autoVerifyPendingWorkers = useCallback(async () => {
+    if (!isSupabaseConfigured) return 0
+    try {
+      const { data: pendingRows, error } = await supabase
+        .from('workers')
+        .select('id, worker_code, created_at')
+        .eq('status', 'pending')
+
+      if (error || !pendingRows || pendingRows.length === 0) return 0
+
+      const manualPending = new Set(getManualPendingIds())
+      const rowsToVerify = pendingRows.filter((row) => !manualPending.has(row.id))
+      if (rowsToVerify.length === 0) return 0
+
+      const idsToVerify = rowsToVerify.map((row) => row.id)
+      const verifiedTimestamp = new Date().toISOString()
+
+      const { error: updateErr } = await supabase
+        .from('workers')
+        .update({
+          status: 'verified',
+          verified_at: verifiedTimestamp,
+        })
+        .in('id', idsToVerify)
+
+      if (updateErr) {
+        console.warn('Auto-verify update warning in Admin:', updateErr.message)
+        return 0
+      }
+
+      return idsToVerify.length
+    } catch (err) {
+      console.warn('Auto-verify check warning:', err)
+      return 0
+    }
+  }, [getManualPendingIds])
+
   const fetchStatusCounts = useCallback(async () => {
     if (!isSupabaseConfigured) return
     try {
@@ -157,6 +223,8 @@ export default function Admin() {
       return
     }
 
+    const safePage = typeof pageNumber === 'number' && !Number.isNaN(pageNumber) ? pageNumber : 0
+
     if (isAppend) {
       setLoadingMore(true)
     } else {
@@ -164,7 +232,7 @@ export default function Admin() {
     }
     setFetchError('')
     try {
-      const from = pageNumber * PAGE_SIZE
+      const from = safePage * PAGE_SIZE
       const to = from + PAGE_SIZE - 1
 
       // Fetch only columns needed for the list to minimize egress
@@ -184,8 +252,8 @@ export default function Admin() {
       }
 
       setWorkers((prev) => (isAppend ? [...prev, ...(data || [])] : (data || [])))
-      setPage(pageNumber)
-      setHasMore(data ? data.length === PAGE_SIZE && (count ? (pageNumber + 1) * PAGE_SIZE < count : true) : false)
+      setPage(safePage)
+      setHasMore(data ? data.length === PAGE_SIZE && (count ? (safePage + 1) * PAGE_SIZE < count : true) : false)
     } catch (err) {
       console.error('Failed to fetch real workers from database:', err)
       setFetchError(err.message || 'Error fetching records from database.')
@@ -194,6 +262,11 @@ export default function Admin() {
       setLoadingMore(false)
     }
   }, [])
+
+  const syncAndLoadAdminWorkers = useCallback(async () => {
+    await autoVerifyPendingWorkers()
+    await Promise.all([fetchWorkers(0, false), fetchStatusCounts()])
+  }, [autoVerifyPendingWorkers, fetchWorkers, fetchStatusCounts])
 
   const checkAdminStatus = useCallback(async (userId) => {
     setCheckingAdmin(true)
@@ -207,8 +280,7 @@ export default function Admin() {
       if (error) throw error
       setIsAdmin(Boolean(data))
       if (data) {
-        fetchWorkers(0, false)
-        fetchStatusCounts()
+        await syncAndLoadAdminWorkers()
       }
     } catch (err) {
       console.error('Error verifying admin authorization:', err)
@@ -217,7 +289,68 @@ export default function Admin() {
       setCheckingAdmin(false)
       setAuthLoading(false)
     }
-  }, [fetchWorkers, fetchStatusCounts])
+  }, [syncAndLoadAdminWorkers])
+
+  // Live Realtime + focus/visibility/storage sync so newly registered workers auto-verify immediately on Admin Panel
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isAdmin || session?.user?.id === 'demo-admin-id') {
+      return
+    }
+
+    const runSyncIfNeeded = async (forceReload = false) => {
+      const updatedCount = await autoVerifyPendingWorkers()
+      if (updatedCount > 0 || forceReload) {
+        await Promise.all([fetchWorkers(0, false), fetchStatusCounts()])
+      }
+    }
+
+    const channel = supabase
+      .channel('admin-workers-auto-verify')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'workers' },
+        async () => {
+          await runSyncIfNeeded(true)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'workers' },
+        async () => {
+          await Promise.all([fetchWorkers(0, false), fetchStatusCounts()])
+        }
+      )
+      .subscribe()
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        runSyncIfNeeded(true)
+      }
+    }
+
+    const handleCrossTabRegistration = (e) => {
+      if (e.key === 'catercrew_last_registration_ts') {
+        runSyncIfNeeded(true)
+      }
+    }
+
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+    window.addEventListener('storage', handleCrossTabRegistration)
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      runSyncIfNeeded(false)
+    }, 8000)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      window.removeEventListener('storage', handleCrossTabRegistration)
+      supabase.removeChannel(channel)
+    }
+  }, [isAdmin, session?.user?.id, autoVerifyPendingWorkers, fetchWorkers, fetchStatusCounts])
 
   // Check auth state
   useEffect(() => {
@@ -300,9 +433,12 @@ export default function Admin() {
         throw new Error('Database is not configured.')
       }
 
+      setManualPendingId(workerId, newStatus === 'pending')
+
+      const verifiedTimestamp = newStatus === 'verified' ? new Date().toISOString() : null
       const updates = {
         status: newStatus,
-        verified_at: newStatus === 'verified' ? new Date().toISOString() : null,
+        verified_at: verifiedTimestamp,
       }
 
       const { data, error } = await supabase
@@ -314,12 +450,21 @@ export default function Admin() {
 
       if (error) throw error
 
+      if (data?.worker_code) {
+        if (newStatus === 'verified') {
+          publishAutoVerifyReceipt(data.worker_code, verifiedTimestamp)
+        } else {
+          removeAutoVerifyReceipt(data.worker_code)
+        }
+      }
+
       setWorkers((prev) => prev.map((w) => (w.id === workerId ? data : w)))
       if (selectedWorker?.id === workerId) {
         setSelectedWorker(data)
       }
+      fetchStatusCounts()
     } catch (err) {
-      alert(`Failed to update status: ${err.message}`)
+      setFetchError(`Failed to update status: ${err.message}`)
     } finally {
       setActionLoading(false)
     }
@@ -347,7 +492,7 @@ export default function Admin() {
         setSelectedWorker(data)
       }
     } catch (err) {
-      alert(`Failed to change tier: ${err.message}`)
+      setFetchError(`Failed to change tier: ${err.message}`)
     } finally {
       setActionLoading(false)
     }
@@ -361,14 +506,21 @@ export default function Admin() {
         throw new Error('Database is not configured.')
       }
 
+      const target = workers.find((w) => w.id === workerId) || selectedWorker
       const { error } = await supabase.from('workers').delete().eq('id', workerId)
       if (error) throw error
+
+      if (target?.worker_code) {
+        removeAutoVerifyReceipt(target.worker_code)
+      }
+      setManualPendingId(workerId, false)
 
       setWorkers((prev) => prev.filter((w) => w.id !== workerId))
       setSelectedWorker(null)
       setDeleteConfirmOpen(false)
+      fetchStatusCounts()
     } catch (err) {
-      alert(`Failed to delete registration: ${err.message}`)
+      setFetchError(`Failed to delete registration: ${err.message}`)
     } finally {
       setActionLoading(false)
     }
@@ -398,19 +550,20 @@ export default function Admin() {
 
   // Count summaries (accurate total counts even before all pages are loaded)
   const counts = useMemo(() => {
+    const useServerCounts = statusCounts.all > 0 && session?.user?.id !== 'demo-admin-id'
     return {
-      all: statusCounts.all || totalCount || workers.length,
-      pending: statusCounts.pending || workers.filter((w) => w.status === 'pending').length,
-      verified: statusCounts.verified || workers.filter((w) => w.status === 'verified').length,
-      suspended: statusCounts.suspended || workers.filter((w) => w.status === 'suspended').length,
+      all: useServerCounts ? statusCounts.all : totalCount || workers.length,
+      pending: useServerCounts ? statusCounts.pending : workers.filter((w) => w.status === 'pending').length,
+      verified: useServerCounts ? statusCounts.verified : workers.filter((w) => w.status === 'verified').length,
+      suspended: useServerCounts ? statusCounts.suspended : workers.filter((w) => w.status === 'suspended').length,
     }
-  }, [statusCounts, totalCount, workers])
+  }, [statusCounts, totalCount, workers, session?.user?.id])
 
   // Export to CSV
   const handleExportCSV = () => {
     const listToExport = filteredWorkers.length ? filteredWorkers : workers
     if (!listToExport.length) {
-      alert('No records available to export.')
+      setFetchError('No records available to export.')
       return
     }
 
@@ -643,7 +796,7 @@ export default function Admin() {
                       district: 'Ernakulam',
                       area: 'Mattancherry',
                       tier: 'silver',
-                      status: 'pending',
+                      status: 'verified',
                       dob: '2003-06-05',
                       height_cm: 174,
                       travel_ok: false,
@@ -809,7 +962,7 @@ export default function Admin() {
             <button
               onClick={() => {
                 testDb()
-                fetchWorkers()
+                syncAndLoadAdminWorkers()
               }}
               disabled={loadingWorkers}
               className="p-2.5 rounded-xl border border-gray-700 bg-gray-800 hover:bg-gray-750 text-gray-200 transition-colors cursor-pointer"
@@ -912,7 +1065,7 @@ export default function Admin() {
               <span>{fetchError}</span>
             </div>
             <button
-              onClick={fetchWorkers}
+              onClick={() => syncAndLoadAdminWorkers()}
               className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-rose-900 hover:bg-rose-800 text-white cursor-pointer"
             >
               Retry Query

@@ -18,7 +18,7 @@ import {
   Download,
   RotateCcw,
 } from 'lucide-react'
-import { supabase, supabaseAnon, isSupabaseConfigured } from '../lib/supabase'
+import { supabase, supabaseAnon, isSupabaseConfigured, publishAutoVerifyReceipt } from '../lib/supabase'
 import { KERALA_DISTRICTS, MAX_PHOTO_SIZE_MB, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 import { compressImage } from '../lib/imageCompression'
 import { generateCertificate } from '../lib/certificate'
@@ -526,6 +526,13 @@ export default function Register() {
           } catch (autoErr) {
             console.warn('Auto-verify call warning:', autoErr)
           }
+
+          await publishAutoVerifyReceipt(savedCode, verifiedAt)
+          try {
+            localStorage.setItem('catercrew_last_registration_ts', String(Date.now()))
+          } catch {
+            // Ignore storage errors
+          }
         }
 
         setRegisteredWorker({
@@ -563,6 +570,13 @@ export default function Register() {
             }
           } catch (autoErr) {
             console.warn('Auto-verify call warning:', autoErr)
+          }
+
+          await publishAutoVerifyReceipt(savedCode, verifiedAt)
+          try {
+            localStorage.setItem('catercrew_last_registration_ts', String(Date.now()))
+          } catch {
+            // Ignore storage errors
           }
         }
 

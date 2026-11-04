@@ -196,6 +196,7 @@ begin
   insert into public.workers (
     tier,
     status,
+    verified_at,
     full_name,
     dob,
     height_cm,
@@ -215,7 +216,8 @@ begin
     consent
   ) values (
     'silver',
-    'pending',
+    'verified',
+    now(),
     trim(p_full_name),
     p_dob,
     p_height_cm,
@@ -240,12 +242,44 @@ begin
     'id', v_worker.id,
     'worker_code', v_worker.worker_code,
     'status', v_worker.status,
+    'verified_at', v_worker.verified_at,
     'tier', v_worker.tier
   );
 end;
 $$;
 
 grant execute on function public.register_worker to anon, authenticated;
+
+create or replace function public.auto_verify_worker(p_worker_code text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_worker public.workers;
+begin
+  update public.workers
+  set status = 'verified',
+      verified_at = coalesce(verified_at, now())
+  where upper(trim(worker_code)) = upper(trim(p_worker_code))
+    and status = 'pending'
+  returning * into v_worker;
+
+  if v_worker.id is null then
+    return json_build_object('updated', false);
+  end if;
+
+  return json_build_object(
+    'updated', true,
+    'worker_code', v_worker.worker_code,
+    'status', v_worker.status,
+    'verified_at', v_worker.verified_at
+  );
+end;
+$$;
+
+grant execute on function public.auto_verify_worker(text) to anon, authenticated;
 
 -- 8. STORAGE BUCKETS CONFIGURATION
 -- Buckets: 'photos' (public read) & 'id-proofs' (private, signed url for admins)

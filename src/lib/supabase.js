@@ -153,3 +153,83 @@ export async function getCompanyDocSignedUrl(path, expiresIn = 3600) {
   return { url: data.signedUrl, error: null }
 }
 
+/**
+ * Publish auto-verification receipt for a newly registered worker so public status/QR pages
+ * immediately reflect Verified status even before an admin session promotes the DB row,
+ * and attempt optional auto_verify_worker RPC if deployed.
+ */
+export async function publishAutoVerifyReceipt(workerCode, verifiedAt = new Date().toISOString()) {
+  if (!workerCode || !isSupabaseConfigured) return
+  const cleanCode = workerCode.trim().toUpperCase()
+
+  try {
+    await supabaseAnon.rpc('auto_verify_worker', { p_worker_code: cleanCode })
+  } catch {
+    // Optional RPC may not be migrated yet
+  }
+
+  try {
+    const payload = new Blob(
+      [JSON.stringify({ worker_code: cleanCode, status: 'verified', verified_at: verifiedAt })],
+      { type: 'application/json' }
+    )
+    await supabaseAnon.storage
+      .from('photos')
+      .upload(`auto_verified/${cleanCode}.json`, payload, {
+        cacheControl: '60',
+        upsert: false,
+        contentType: 'application/json',
+      })
+  } catch {
+    // Ignore if receipt already exists
+  }
+}
+
+/**
+ * Remove auto-verification receipt (used when an admin explicitly sets a worker back to pending or suspended)
+ */
+export async function removeAutoVerifyReceipt(workerCode) {
+  if (!workerCode || !isSupabaseConfigured) return
+  const cleanCode = workerCode.trim().toUpperCase()
+  try {
+    await supabase.storage.from('photos').remove([`auto_verified/${cleanCode}.json`])
+  } catch {
+    // Ignore storage cleanup errors
+  }
+}
+
+/**
+ * Resolve effective worker verification status using auto-verification receipt when DB row is still 'pending'
+ */
+export async function resolveEffectiveWorkerStatus(worker) {
+  if (!worker || worker.status !== 'pending' || !worker.worker_code || !isSupabaseConfigured) {
+    return worker
+  }
+
+  const cleanCode = worker.worker_code.trim().toUpperCase()
+  const receiptUrl = getPhotoPublicUrl(`auto_verified/${cleanCode}.json`)
+  if (!receiptUrl) return worker
+
+  try {
+    const res = await fetch(`${receiptUrl}?t=${Date.now()}`, { method: 'GET' })
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') || ''
+      if (contentType.includes('application/json') || contentType.includes('text/plain')) {
+        const data = await res.json()
+        if (data && data.status === 'verified') {
+          return {
+            ...worker,
+            status: 'verified',
+            verified_at: data.verified_at || worker.verified_at || new Date().toISOString(),
+          }
+        }
+      }
+    }
+  } catch {
+    // Fallback to DB worker status
+  }
+
+  return worker
+}
+
+

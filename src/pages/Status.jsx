@@ -14,7 +14,7 @@ import {
   MessageCircle,
   Users,
 } from 'lucide-react'
-import { supabase, isSupabaseConfigured, getPhotoPublicUrl } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, getPhotoPublicUrl, resolveEffectiveWorkerStatus } from '../lib/supabase'
 import { generateCertificate } from '../lib/certificate'
 import { TIERS, STATUS_CONFIG, COMMUNITY_WHATSAPP_LINK } from '../lib/constants'
 
@@ -67,7 +67,8 @@ export default function Status() {
         if (!qData) {
           setNotFound(true)
         } else {
-          setWorker(qData)
+          const resolved = await resolveEffectiveWorkerStatus(qData)
+          setWorker(resolved)
         }
       } else {
         // RPC get_public_worker returns a table/array
@@ -75,7 +76,8 @@ export default function Status() {
         if (!result || !result.worker_code) {
           setNotFound(true)
         } else {
-          setWorker(result)
+          const resolved = await resolveEffectiveWorkerStatus(result)
+          setWorker(resolved)
         }
       }
     } catch (err) {
@@ -116,7 +118,7 @@ export default function Status() {
       await generateCertificate(worker)
     } catch (err) {
       console.error('Failed to generate certificate:', err)
-      alert(err.message || 'Failed to generate certificate.')
+      setErrorMsg(err.message || 'Failed to generate certificate.')
     } finally {
       setDownloadingPdf(false)
     }
