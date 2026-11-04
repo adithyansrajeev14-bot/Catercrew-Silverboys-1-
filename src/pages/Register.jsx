@@ -375,16 +375,16 @@ export default function Register() {
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold mb-3">
           <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Automatic Instant Verification Approved</span>
+          <span>Registration Successful</span>
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">
-          You are Verified! 🎉
+          Registration Submitted! 🎉
         </h1>
 
         <p className="mt-3 text-base sm:text-lg text-gray-600 max-w-md mx-auto">
-          Welcome to CaterCrew! Your live selfie and credentials have passed verification automatically. You are now officially an active{' '}
-          <strong className="text-emerald-700 font-bold">Verified Silver Boy</strong>.
+          Welcome to CaterCrew! Your details and photo have been submitted successfully. You are now officially registered as a{' '}
+          <strong className="text-emerald-700 font-bold">CaterCrew Silver Boy</strong>.
         </p>
 
         {/* Unique Worker Code Card */}
@@ -461,13 +461,13 @@ export default function Register() {
       {/* Page Header */}
       <div className="text-left sm:text-center mb-8">
         <span className="text-xs uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-          Instant Auto-Verification Enabled
+          Kerala Catering Crew Registration
         </span>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-3 tracking-tight">
           Register as Silver Boy
         </h1>
         <p className="text-gray-500 mt-2 text-base sm:text-lg">
-          Complete a quick live selfie movement check to be verified automatically. No waiting for manual approval.
+          Join Kerala's premier catering network. Fill out your details below to submit your registration.
         </p>
       </div>
 
