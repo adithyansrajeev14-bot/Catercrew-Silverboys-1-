@@ -121,3 +121,27 @@ export async function checkDatabaseConnection() {
   }
 }
 
+/**
+ * Helper to obtain a signed URL for private company documents
+ */
+export async function getCompanyDocSignedUrl(path, expiresIn = 3600) {
+  if (!path) return { url: null, error: 'No path provided' }
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return { url: path, error: null }
+  }
+
+  if (!isSupabaseConfigured) {
+    return { url: null, error: 'Supabase is not configured' }
+  }
+
+  const { data, error } = await supabase.storage
+    .from('company-docs')
+    .createSignedUrl(path, expiresIn)
+
+  if (error) {
+    return { url: null, error: error.message }
+  }
+
+  return { url: data.signedUrl, error: null }
+}
+

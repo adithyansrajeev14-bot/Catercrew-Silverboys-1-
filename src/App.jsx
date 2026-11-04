@@ -15,10 +15,7 @@ import AuthCallback from './pages/AuthCallback'
 import Events from './pages/Events'
 import EventDetails from './pages/EventDetails'
 import MyBookings from './pages/MyBookings'
-import CompanySetup from './pages/CompanySetup'
-import CompanyDashboard from './pages/CompanyDashboard'
-import PostEvent from './pages/PostEvent'
-import CompanyManageEvent from './pages/CompanyManageEvent'
+import VerificationFlow from './pages/VerificationFlow'
 
 import { useEffect } from 'react'
 
@@ -52,6 +49,8 @@ function AppContent() {
           <Route path="/status" element={<Status />} />
           <Route path="/status/:id" element={<Status />} />
           <Route path="/verify/:id" element={<Verify />} />
+          <Route path="/verify" element={<Navigate to="/status" replace />} />
+          <Route path="/verify-flow" element={<VerificationFlow />} />
 
           {/* Events, Company Portal & Auth disabled on main branch - available on progress branch */}
           <Route path="/login" element={<Navigate to="/" replace />} />
